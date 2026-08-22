@@ -1,8 +1,8 @@
-# 咔蚯（原 咔蚯）— 文档索引
+# 咔蚯 — 文档索引
 
 本文件是所有项目文档的规范入口。
 
-> **现行编译规范（2026-08-21 更新）**：本仓库已重命名为 `mybot`，唯一编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物锁定 `build_cuda/Release/ai.exe`。旧版 `BUILDER.ps1`/`build.md`/`BUILD_AND_RELEASE.md`/`BUILD_RELEASE_GUIDE.md`/`guides/build-*.md` 等文档因引用已废弃脚本与旧路径（`<repo-root>`、`build_cuda_current`），已于本轮清理删除。详细环境注入步骤见 `AGENTS.md` §4 与 `PROJECT_FILE_DISPOSITION.md`。
+> **编译规范**：唯一编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物锁定 `build_cuda/Release/ai.exe`。详细环境注入步骤见 `AGENTS.md` §4。
 
 ---
 
@@ -16,8 +16,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 拓扑、后端强制、配置权威、三热键系统、扳机几何、P2 风险。 |
 | [TESTING.md](TESTING.md) | 验证边界、模拟计划（S01–S42）、已知限制。 |
 | [PUSH_SCOPE.md](PUSH_SCOPE.md) | GitHub 推送范围、排除规则和推送前检查清单。 |
-| [PROJECT_STATUS.md](PROJECT_STATUS.md) | 后端状态、P0–P2 问题跟踪、改进计划、清理策略。 |
-| [PROJECT_FILE_DISPOSITION.md](PROJECT_FILE_DISPOSITION.md) | 文件留存/归档/删除/暂缓处置清单与证据（历史路径记录）。 |
+| [PROJECT_STATUS.md](PROJECT_STATUS.md) | 后端状态、P0–P2 问题跟踪、改进计划。 |
 | [config.md](config.md) | `config.ini` 全字段参考。 |
 | [guides.md](guides.md) | 设置、使用、排障指南索引。 |
 | [UI_LAYOUT_BACKUP.md](UI_LAYOUT_BACKUP.md) | UI 布局快照（参考备份，非行为权威）。 |
@@ -33,7 +32,7 @@
 - **项目状态与问题**：[PROJECT_STATUS.md](PROJECT_STATUS.md)
 - **配置参考**：[config.md](config.md)
 - **设置与排障**：[guides.md](guides.md) + [guides/](guides/)
-- **编译**：根目录 `build_current.ps1`（见上文注记，勿再用已删旧文档）
+- **编译**：根目录 `build_current.ps1`
 
 ---
 
@@ -52,19 +51,3 @@
 | [guides/input-methods.md](guides/input-methods.md) | 输入方式 |
 | [guides/imgui-checkbox-layout-zh.md](guides/imgui-checkbox-layout-zh.md) | ImGui 全宽复选框与等宽列布局（中文） |
 | [guides/overlay.md](guides/overlay.md) | Overlay 使用 |
-
----
-
-## 归档（历史，非权威）
-
-仅保留历史上下文，不描述当前产品。
-
-| 路径 | 内容 |
-|------|------|
-| [archive/design/multi-hotkey-local-config-plan.md](archive/design/multi-hotkey-local-config-plan.md) | 历史设计：多热键局部配置计划（已过时，当前为 3 热键） |
-| [archive/design/multi-hotkey-local-config-design.md](archive/design/multi-hotkey-local-config-design.md) | 历史设计：多热键设计规范（已过时） |
-| [archive/diagnostics/source-simulation-findings-2026-07.txt](archive/diagnostics/source-simulation-findings-2026-07.txt) | 历史诊断：源码模拟与问题定位（P0–P2 已修复，见 AGENTS.md §12） |
-| [archive/legacy/legacy-defaults.txt](archive/legacy/legacy-defaults.txt) | 历史默认参数（已过时，当前见 AGENTS.md §8 与 config.md） |
-| [archive/legacy/dml-backend-history.md](archive/legacy/dml-backend-history.md) | DML 后端历史（已废弃，不可用） |
-| [archive/legacy/imgui-tutorial-original.md](archive/legacy/imgui-tutorial-original.md) | ImGui 教程原文（历史） |
-| [archive/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md](archive/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md) | 文档整合计划（已执行完成） |

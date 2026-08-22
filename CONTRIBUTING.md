@@ -39,7 +39,7 @@ When a change affects product behavior, build commands, config fields, or UI lay
 | Changed area | Document to update |
 |---|---|
 | Product behavior / trigger / hotkey logic | [docs/IMPLEMENTATION_SPEC.md](docs/IMPLEMENTATION_SPEC.md) |
-| Build commands, toolchain, environment | [AGENTS.md](AGENTS.md) §4–§7 and [docs/BUILD_RELEASE_GUIDE.md](docs/BUILD_RELEASE_GUIDE.md) |
+| Build commands, toolchain, environment | [AGENTS.md](AGENTS.md) §4–§7 and [docs/README.md](docs/README.md) |
 | Config fields or defaults | [docs/config.md](docs/config.md) and [AGENTS.md](AGENTS.md) §8 |
 | UI layout | [docs/UI_LAYOUT_BACKUP.md](docs/UI_LAYOUT_BACKUP.md) |
 | Test scenarios | [docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md](docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md) |

@@ -7,14 +7,14 @@
     生成物：<BuildDir>/Release/ai.exe
 
     关键陷阱说明：
-      1. 本项目 build_cuda/CMakeCache.txt 写死指向旧副本 <old-repo-root>，
-         直接 cmake --build build_cuda 会编译「旧副本」而非当前项目。
+      1. build_cuda/CMakeCache.txt 可能记录非当前源目录，
+         直接 cmake --build build_cuda 会编译到缓存记录目录，而不是本脚本目录。
       2. 官方 build_cuda.bat 依赖 vswhere，本环境 vswhere 找不到
          E:/DevTools/VisualStudio（非标准安装），会报“未找到 VS”。
       3. VsDevCmd.bat 在本环境有缺陷(ommon7)，不会写入 PATH，需手动补 bin。
       4. 源目录直接从 $PSScriptRoot 推导，不依赖软链，避免路径拼接错误。
 
-    注：2026-08-21 起已弃用 <old-symlink> 软链，全程使用真实脚本目录。
+    注：不依赖软链或手工路径，全程使用真实脚本目录。
 #>
 $ErrorActionPreference = "Continue"
 

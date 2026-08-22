@@ -14,7 +14,7 @@ For most users, the GUI is the safest way to edit settings. This page exists so 
 - Paths may be relative to the executable folder.
 - If a value is outside its accepted range, the app clamps it or falls back to a valid default.
 
-The defaults below are the generated defaults for a fresh config. A few legacy missing-key fallbacks in source are different for backward compatibility; those are called out where they matter.
+The defaults below are the generated defaults for a fresh config. A few compat-key fallbacks in source are different for backward compatibility; those are called out where they matter.
 
 ## Quick Backend Setup
 
@@ -235,9 +235,9 @@ Use `None` to disable a button where supported.
 
 ## Depth
 
-The following depth-related keys are not present in the current config schema. They may appear in historical or experimental configs but are not actively loaded or saved by the current build.
+The following depth-related keys are not present in the current config schema. They may appear in experimental or unsupported configs but are not actively loaded or saved by the current build.
 
-| Key | Historical Default | Meaning |
+| Key | Reference Default | Meaning |
 |---|---:|---|
 | `depth_inference_enabled` | `true` | Enables depth inference feature. |
 | `depth_model_path` | `depth_anything_v2.engine` | Depth model path. |

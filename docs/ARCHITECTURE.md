@@ -28,7 +28,7 @@
 | `build_cuda/` | Active configured CUDA build tree |
 | `build_cuda/Release/ai.exe` | Current release executable |
 | `tools/` | Build, dependency, and packaging scripts |
-| `packages/` | Historical DML/ONNX Runtime NuGet dependencies (not used by current CMake) |
+| `packages/` | Unused NuGet dependency directory (not used by current CMake) |
 
 ---
 
@@ -36,7 +36,7 @@
 
 `CMakeLists.txt` lines 24-26 abort with `FATAL_ERROR` when `AIMBOT_USE_CUDA=OFF`. Line 422 unconditionally defines `USE_CUDA`. There is no DML code path in the current build.
 
-DML scripts, historical build trees (`build_dml_alt/`), and DML packaging scripts are preserved for reference but cannot be run with the current source. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for DML historical status.
+DML scripts, build trees (`build_dml_alt/`), and DML packaging scripts are not supported by the current source. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for DML status.
 
 ---
 
@@ -69,7 +69,7 @@ The application uses separate threads for capture, detection, aiming, and the ov
 | `config/config.cpp` `Config::Config()` | All default values |
 | `config.ini` (runtime, beside ai.exe) | User-saved overrides; runtime state only, not a defaults source |
 
-`config.ini` is generated at runtime. Deleting it causes the program to write a fresh file from the compiled defaults. Legacy `config.ini` files from older versions may contain obsolete fields.
+`config.ini` is generated at runtime. Deleting it causes the program to write a fresh file from the compiled defaults.
 
 ### Key defaults (from config.cpp, verified 2026-07-28)
 
@@ -84,7 +84,7 @@ The application uses separate threads for capture, detection, aiming, and the ov
 | `fovX` / `fovY` | 85 / 55 | |
 | `capture_use_cuda` | false | |
 
-The field `virtual_camera_heigth` (note the intentional legacy misspelling) must be read and written with the same spelling. Renaming it requires updating both the INI read and write paths.
+The field `virtual_camera_heigth` is an intentionally retained spelling. It must be read and written with the same spelling. Renaming it requires updating both the INI read and write paths.
 
 ---
 

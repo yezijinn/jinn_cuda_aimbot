@@ -1,6 +1,6 @@
 # IMPLEMENTATION_SPEC.md — 咔蚯 权威实现规范
 
-> **权威性声明**：本文档是产品行为和实现的目标契约。它描述的是已确认的设计决策，而非对当前代码状态的声明。凡本文与历史文档、现有代码存在冲突，以本文为准。实现者应以本规范为验收标准。
+> **权威性声明**：本文档是产品行为和实现的目标契约。它描述的是已确认的设计决策，而非对当前代码状态的声明。凡本文与其他文档、现有代码存在冲突，以本文为准。实现者应以本规范为验收标准。
 >
 > 参见 [AGENTS.md](../AGENTS.md) 了解构建、工具链和维护约定。
 
@@ -14,7 +14,7 @@
 
 - 不得保留、恢复或新增 DirectML（DML）构建路径、运行时回退或发行包。
 - `CMakeLists.txt` 必须在 `AIMBOT_USE_CUDA=OFF` 时以 `FATAL_ERROR` 中止，`USE_CUDA` 宏必须无条件定义。
-- 任何引用 DML 构建命令、DML 依赖项或 DML 运行时的历史文档和脚本，对当前产品不具约束力。
+- 任何引用 DML 构建命令、DML 依赖项或 DML 运行时的文档和脚本，对当前产品不具约束力。
 
 ### 1.2 冲突文档标记
 
@@ -22,9 +22,9 @@
 
 | 资源 | 冲突内容 |
 |---|---|
-| `docs/BUILD_RELEASE_GUIDE.md` | 历史版本曾包含 DML 构建步骤和 DML 发行包生成流程；当前版本已移除，仅描述 CUDA/TensorRT |
+| DML 构建说明 | DML 构建步骤和 DML 发行包生成流程；当前产品仅支持 CUDA/TensorRT |
 | `docs/guides/build-zh.md` | 请以本文件为准；若存在 DML 相关说明则以本规范为准 |
-| `build_dml_alt/` 目录 | 历史 DML 构建树，不可用于重新配置 |
+| `build_dml_alt/` 目录 | DML 构建树，不可用于重新配置 |
 | `tools/build_dml*.ps1`（如存在） | DML 构建/打包脚本 |
 | `docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md` 中 DML 相关场景 | DML 后端相关测试路径 |
 
@@ -75,10 +75,10 @@
 - 3 个热键配置文件（Profiles）各自维护一个局部类别子集，该子集**必须**是全局启用集合的子集，不得超出全局启用边界。
 - 全局类别启用变化时，三个配置文件的局部子集**必须**自动重置以匹配新的全局集合；当全局集合非空时，每个配置文件至少保留一个已启用类别。
 
-### 3.3 旧版/缺失类别配置的默认行为
+### 3.3 缺失/未声明类别配置的默认行为
 
 - INI 文件中缺失的类别条目默认为**关闭**（不启用）。
-- 不得从旧版配置文件继承未显式声明为启用的类别。
+- 不得从配置继承未显式声明为启用的类别。
 
 ### 3.4 目标参与条件
 
@@ -341,16 +341,16 @@ GPU 直通捕获（D3D11 capture → CUDA 设备内存，零 CPU 拷贝）是核
 
 | 遗留资源 | 冲突内容 | 本规范裁决 |
 |---|---|---|
-| `docs/BUILD_RELEASE_GUIDE.md` | 历史版本曾包含 DML 构建步骤、DML 发行包生成流程、双后端描述；当前版本已移除 | DML 路径已废弃，仅 CUDA/TensorRT 有效 |
+| DML 构建说明 | 曾包含 DML 构建步骤、DML 发行包生成流程、双后端描述；当前版本未纳入 | DML 路径不受支持，仅 CUDA/TensorRT 有效 |
 | `docs/guides/build-zh.md` | 若存在 DML 相关构建说明 | DML 路径已废弃，仅 CUDA/TensorRT 有效 |
-| `tools/build_dml*.ps1`（如存在） | DML 构建/打包命令 | 不得执行，仅作历史参考 |
-| `build_dml_alt/` 目录 | 历史 DML 构建树 | 不可重新配置为 DML 后端 |
+| `tools/build_dml*.ps1`（如存在） | DML 构建/打包命令 | 不得执行 |
+| `build_dml_alt/` 目录 | DML 构建树 | 不可重新配置为 DML 后端 |
 | `docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md` 中旧 key_delay 场景 | 假设 key_delay_ms 从热键按下时计时的测试场景 | 以本规范第 5.2 节为准，从准心首次进入区域计时 |
 | `docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md` DML 相关场景 | DML 后端测试路径 | DML 后端已废弃 |
-| `AGENTS.md §12` 中历史 P0 描述 | 曾将当前代码行为描述为设计意图存疑 | 本规范第 5.1 节明确：正确设计是"准心落入目标内部区域"；相关实现已修复，后续改动必须保持该契约 |
-| `config.ini` 历史默认值 | 旧版 config.ini 中可能存在 `class_player`/`class_head` 类别条目 | 缺失/旧版类别条目默认关闭；`class_player`/`class_head` 特殊语义已移除 |
-| `config.h` `DEFAULT_MODEL_CLASS_COUNT = 2` | 历史默认类别数为 2 | 类别数必须从模型张量形状推断，不得使用静态默认值；NC 必须在 1..19 范围内 |
-| `AGENTS.md §12` 中历史 P1 描述（key_delay 计时起点） | 曾记录为当前代码问题 | 本规范第 5.2 节确认为 P0 行为契约；相关实现已修复，后续改动必须从准心首次进入区域开始计时 |
+| `AGENTS.md §12` 中 P0 描述 | 曾将当前代码行为描述为设计意图存疑 | 本规范第 5.1 节明确：正确设计是"准心落入目标内部区域"；相关实现已修复，后续改动必须保持该契约 |
+| `config.ini` 默认值 | config.ini 中可能存在 `class_player`/`class_head` 类别条目 | 未声明类别条目默认关闭；`class_player`/`class_head` 特殊语义不参与当前流程 |
+| `config.h` `DEFAULT_MODEL_CLASS_COUNT = 2` | 默认类别数常量不用于运行 | 类别数必须从模型张量形状推断，不得使用静态默认值；NC 必须在 1..19 范围内 |
+| `AGENTS.md §12` 中 P1 描述（key_delay 计时起点） | 曾记录为当前代码问题 | 本规范第 5.2 节确认为 P0 行为契约；相关实现已修复，后续改动必须从准心首次进入区域开始计时 |
 
 ---
 

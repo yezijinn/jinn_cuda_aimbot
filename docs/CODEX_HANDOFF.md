@@ -1,9 +1,9 @@
-# Codex Handoff — mybot（原 咔蚯）
+# Codex Handoff — 咔蚯
 
-> **现行状态注记（2026-08-21）**：本仓库已重命名为 `mybot`，源根当前为 `mybot-main`。编译入口为根目录 `build_current.ps1`，产物 `build_cuda/Release/ai.exe`（旧 `BUILDER.ps1`/`BUILD_AND_RELEASE.md` 等已废弃清理，详见 [README.md](README.md#现行编译规范2026-08-21-更新)）。
+> **当前状态**：编译入口为根目录 `build_current.ps1`，产物 `build_cuda/Release/ai.exe`。
 
-**Status:** Current as of 2026-07-29（路径与构建入口已按上注记更新）  
-**Source root:** `mybot-main`
+**Status:** Current as of 2026-07-29  
+**Source root:** `<repo-root>`（GitHub 仓库根目录）
 
 This document is the single entry point for understanding, building, and maintaining this project.
 
@@ -15,7 +15,7 @@ This document is the single entry point for understanding, building, and maintai
 **Maintenance and build:** [AGENTS.md](../AGENTS.md)  
 **Documentation index:** [README.md](README.md)
 
-This is a Windows-only C++17 CUDA/TensorRT aim-assist application. It captures the screen, runs YOLO object detection on a GPU, and moves the mouse to assist aiming. The current backend is CUDA/TensorRT only. DirectML (DML) references in this workspace are historical and not executable with the current source.
+This is a Windows-only C++17 CUDA/TensorRT aim-assist application. It captures the screen, runs YOLO object detection on a GPU, and moves the mouse to assist aiming. The current backend is CUDA/TensorRT only; DirectML (DML) is not supported by the current source.
 
 ---
 
@@ -35,7 +35,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for:
 
 ## Build and Release
 
-> 现行编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物 `build_cuda/Release/ai.exe`。详见 [README.md 现行编译规范](README.md#现行编译规范2026-08-21-更新)。
+> 编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物 `build_cuda/Release/ai.exe`。详见 [README.md](README.md)。
 
 - 前提：Visual Studio（MSVC）、CUDA 13.2、TensorRT、Ninja
 - 当前构建目录：`build_cuda`
@@ -59,10 +59,9 @@ See [TESTING.md](TESTING.md) for:
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) for:
 
-- Backend status: CUDA/TensorRT only, DML historical
+- Backend status: CUDA/TensorRT only, DML unsupported
 - P0-P2 issue tracker with source locations and fix status
-- Historical cleanup policy (archive before delete, evidence-backed only)
-- File disposition ledger location
+- Issue-fix tracking and verification boundary
 
 ---
 
@@ -99,16 +98,9 @@ See [PROJECT_STATUS.md](PROJECT_STATUS.md) for:
 
 ## Current Limitations
 
-- No Git repository root at workspace level (provenance unavailable).
 - No full unit test framework or CI.
 - Hardware validation (GPU capture, mouse I/O, real game) requires manual on-device testing.
-- DML backend is historical only; current CMakeLists.txt rejects CUDA OFF with FATAL_ERROR.
-
----
-
-## Historical Material
-
-Historical documents, DML scripts, and obsolete build paths are preserved under `archive/` and marked as non-authoritative. See [PROJECT_FILE_DISPOSITION.md](PROJECT_FILE_DISPOSITION.md) for the full inventory.
+- DML backend is not supported; current CMakeLists.txt rejects CUDA OFF with FATAL_ERROR.
 
 ---
 

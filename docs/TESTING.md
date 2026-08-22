@@ -100,7 +100,7 @@ These must pass after implementing the corresponding feature:
 
 **GUI validation not performed.** The overlay UI (ImGui-based) was not loaded or screenshotted. Tab order, layout, and control behavior are documented in [IMPLEMENTATION_SPEC.md](IMPLEMENTATION_SPEC.md) and [UI_LAYOUT_BACKUP.md](UI_LAYOUT_BACKUP.md) but not visually verified.
 
-**DML cannot be validated.** CMakeLists.txt rejects DML. The DML test scenarios in `SOURCE_LOGIC_SIMULATION_TEST_PLAN.md` are historical; do not attempt to execute them.
+**DML cannot be validated.** CMakeLists.txt rejects DML. Do not attempt to execute DML test scenarios.
 
 ---
 

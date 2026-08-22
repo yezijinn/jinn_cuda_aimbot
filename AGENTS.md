@@ -12,7 +12,7 @@
 
 > **[docs/IMPLEMENTATION_SPEC.md](docs/IMPLEMENTATION_SPEC.md) 是产品行为和实现的权威目标契约。**
 >
-> 凡本文档（AGENTS.md）、历史文档（包括已清理的 `BUILD_RELEASE_GUIDE.md` 类旧构建说明、`docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md` 及任何 DML 相关脚本和说明）中涉及产品语义的内容，与 `docs/IMPLEMENTATION_SPEC.md` 存在冲突时，以 `docs/IMPLEMENTATION_SPEC.md` 为准。
+> 凡本文档（AGENTS.md）与 `docs/IMPLEMENTATION_SPEC.md` 存在冲突时，以 `docs/IMPLEMENTATION_SPEC.md` 为准。
 >
 > 本文档（AGENTS.md）聚焦于构建命令、工具链配置、环境路径和维护约定，不重复定义产品行为。
 
@@ -21,7 +21,7 @@
 ## 1. 项目拓扑
 
 - **语言**：C++17，Windows-only，可执行目标 `ai`，入口 `mybot.cpp`（位于项目根 `<repo-root>`）。
-- **后端**：当前 `CMakeLists.txt`（lines 24–26）在 `AIMBOT_USE_CUDA=OFF` 时直接以 `FATAL_ERROR` 中止，lines 28–31 明确注释"CUDA/TensorRT is the only supported backend"，并无条件定义宏 `USE_CUDA`（line 422）。当前产品仅支持 CUDA/TensorRT；DML 相关文档、脚本、构建树和发行包均为历史参考，不得恢复、配置、构建或打包 DML 路径。
+- **后端**：当前 `CMakeLists.txt`（lines 24–26）在 `AIMBOT_USE_CUDA=OFF` 时直接以 `FATAL_ERROR` 中止，lines 28–31 明确注释"CUDA/TensorRT is the only supported backend"，并无条件定义宏 `USE_CUDA`（line 422）。当前产品仅支持 CUDA/TensorRT；DML 不支持，不得配置、构建或打包 DML 路径。
 - **配置权威**：`config/config.h`（字段声明和常量）和 `config/config.cpp`（`Config::Config()` 构造函数中的默认值）是 schema 和默认值的唯一来源；`config.ini` 是运行时生成状态，不是默认值定义。
 - **串口库**：`serial` 以 `serial_embedded` 静态库形式嵌入；编辑 `mybot.cpp` 时保留附近的中文日志字符串。
 - **编译标志**：MSVC `/utf-8 /W3 /sdl /permissive- /EHsc`，`ai` 和 `serial_embedded` 均使用静态 MSVC 运行时。
@@ -34,7 +34,7 @@
 | `CMakeLists.txt` | 后端选择和源文件清单 |
 | `build_current.ps1` | 当前唯一构建入口：注入 VS/CUDA/Ninja 环境并 `--fresh` 重配后编译 |
 | `CUDA.TensorRT/` | CUDA/TensorRT SDK 和运行时资源（本地） |
-| `packages/` | 历史 DML/ONNX Runtime/C++WinRT 构建依赖；当前 CMake 不使用，不得作为产品构建依赖 |
+| `packages/` | 未使用的依赖目录；CMake 不使用，不得作为产品构建依赖 |
 | `build_cuda/` | 当前有效的 CUDA 构建树 |
 
 **发行路径约定**：不使用 `build\dml`、`build\cuda` 或 `release\` 作为交付路径，除非经过脚本/CMake 对齐后明确重新约定。不对这些目录的当前是否存在作任何断言。
@@ -52,7 +52,7 @@
 
 ### 热键局部配置
 
-每个热键页面承载当前热键的**局部配置**，包括：检测参数、瞄准偏移、移动修正、预测、压枪、动态范围、类别子集和扳机区域/时序。类别子集必须显式配置；缺失或旧版类别条目默认关闭，不得回退为全局启用。全局配置只保留程序级内容（模型、全局类别启用/优先级、全局 FOV、输入设备等）。
+每个热键页面承载当前热键的**局部配置**，包括：检测参数、瞄准偏移、移动修正、预测、压枪、动态范围、类别子集和扳机区域/时序。类别子集必须显式配置；缺失类别条目默认关闭，不得回退为全局启用。全局配置只保留程序级内容（模型、全局类别启用/优先级、全局 FOV、输入设备等）。
 
 ### 类别两层过滤
 
@@ -71,7 +71,7 @@
 
 ## 4. 构建命令与活动目录
 
-> ⚠️ **当前 CMake 仅支持 CUDA/TensorRT 后端。** DML 构建命令来自历史文档，**当前源码不再支持**；在 CMakeLists.txt 重新引入 DML 路径之前，不要尝试执行 DML 配置或构建命令。
+> ⚠️ **当前 CMake 仅支持 CUDA/TensorRT 后端。** DML 构建命令不受支持；不要尝试执行 DML 配置或构建命令。
 
 ### 当前有效 Release 输出目录
 
@@ -79,7 +79,7 @@
 |---|---|---|
 | CUDA/TensorRT（当前唯一支持） | `build_cuda` | `build_cuda\Release\ai.exe` |
 
-历史文档中的 `build_dml_alt` 目录和 DML 交付路径描述已失效。不使用 `build\dml`、`build\cuda` 或 `release\` 作为交付路径，除非经脚本/CMake 对齐后重新约定。
+不使用 `build_dml_alt`、`build\dml`、`build\cuda` 或 `release\` 作为交付路径，除非经脚本/CMake 对齐后重新约定。
 
 ### 唯一构建入口（PowerShell）
 
@@ -132,7 +132,7 @@ Get-ChildItem -Path (Get-PSDrive -PSProvider FileSystem).Root -Recurse -Filter "
 ## 7. 依赖与 OpenCV 路径
 
 - **CUDA（当前唯一支持的后端）**：CUDA Toolkit + TensorRT 头/库；C++/WinRT 头来自 Windows SDK。OpenCV 默认路径为 `modules/opencv/build/cuda/install`（由 `AIMBOT_OPENCV_CUDA_ROOT` 控制）；TensorRT 搜索顺序为项目本地 `CUDA.TensorRT/`、`modules/TensorRT-*`、`%CUDA_PATH%` 父目录和 `C:\Program Files\NVIDIA GPU Computing Toolkit`（见 CMakeLists.txt lines 39–72）。CUDA OpenCV 首次准备可能较慢，包装脚本会从源码构建。
-- **DML 依赖**（历史参考，当前 CMake 不使用）：历史文档记录 DML 使用 `modules/opencv/build/dml` 下的 OpenCV、NuGet 包（`packages/`）和 ONNX Runtime DLL；当前 CMakeLists.txt 在构建后阶段明确移除 `onnxruntime.dll` 和 `onnxruntime_providers_*.dll`（lines 487–489）。
+- **DML 依赖**（不支持）：DML 的 OpenCV、NuGet 包（`packages/`）和 ONNX Runtime DLL 不作为产品依赖；当前 CMakeLists.txt 在构建后阶段明确移除 `onnxruntime.dll` 和 `onnxruntime_providers_*.dll`（lines 487–489）。
 - 修改 CMake 生成器检查或后端/依赖布局时，必须同步更新对应的包装脚本。
 
 ---
@@ -151,10 +151,10 @@ Get-ChildItem -Path (Get-PSDrive -PSProvider FileSystem).Root -Recurse -Filter "
 | `aim_offset_x/y` | 0.5 / 0.5 | 0.0–1.0 |
 | `fovX / fovY` | 85 / 55 | — |
 | `MAX_CLASSES` | 80 | 内部存储容量，不是允许模型类别数 |
-| `DEFAULT_MODEL_CLASS_COUNT` | 2 | 历史回退常量；运行时不得使用，模型类别数必须从输出张量推断且为 1..19 |
+| `DEFAULT_MODEL_CLASS_COUNT` | 2 | 兼容常量；运行时不得使用，模型类别数必须从输出张量推断且为 1..19 |
 
-- 配置项 `virtual_camera_heigth`（拼写含错字 `heigth`，历史兼容拼写）：修改或重命名前需确认 INI 读写两端同步，避免无声地丢失配置。
-- 发行包打包脚本统一写入 `aim_offset = 0.5,0.5` 和扳机内部矩形默认值 `0.1,0.1,0.8,0.8`，并移除热键4/5配置行。`USE_CUDA` 宏由当前 CMake 无条件定义（line 422）；历史文档中提及的"CUDA-only 字段在 DML 编译时由 `USE_CUDA` 宏保护"描述已不适用于当前源码。
+- 配置项 `virtual_camera_heigth`（拼写含错字 `heigth`，兼容拼写）：修改或重命名前需确认 INI 读写两端同步，避免无声地丢失配置。
+- 发行包打包脚本统一写入 `aim_offset = 0.5,0.5` 和扳机内部矩形默认值 `0.1,0.1,0.8,0.8`，并移除热键4/5配置行。`USE_CUDA` 宏由当前 CMake 无条件定义（line 422）。
 
 ---
 
@@ -167,9 +167,9 @@ Get-ChildItem -Path (Get-PSDrive -PSProvider FileSystem).Root -Recurse -Filter "
 - YOLOv8/v11/v26 输出：`C = 4 + NC`，`NC = C - 4`
 - YOLOv5/v7 输出（含 objectness）：`C = 5 + NC`，`NC = C - 5`
 - 端到端 NMS 格式（`[N, 6]`）：从 ONNX metadata 读取 `names` 字典长度，TensorRT engine 的 metadata 在序列化后丢失，需编译前保存 NC。
-- SunPoint 多输出格式（含 `heat`/`box`/`offset` 节点）：历史上按 2 类处理；当前产品仍必须通过模型输出推断并验证 NC 为 1..19，不能以该历史值绕过验证。
+- SunPoint 多输出格式（含 `heat`/`box`/`offset` 节点）：不按固定 2 类处理；当前产品必须通过模型输出推断并验证 NC 为 1..19。
 
-C++ 推断路径：当前 CUDA 后端走 `trt_detector.cpp` 中的输出维度读取；通用兼容函数 `TryResolveClassLayout()` 位于 `postProcess.cpp`。历史 DML 路径使用 `DirectMLDetector::getNumberOfClasses()`，当前 CMake 不包含该后端。
+C++ 推断路径：当前 CUDA 后端走 `trt_detector.cpp` 中的输出维度读取；通用兼容函数 `TryResolveClassLayout()` 位于 `postProcess.cpp`。DML 路径不受支持，CMake 不包含该后端。
 
 ---
 
@@ -200,7 +200,7 @@ C++ 推断路径：当前 CUDA 后端走 `trt_detector.cpp` 中的输出维度�
 
 优先执行顺序：S01/S04/S06/S08（基础状态和热键）→ S09/S10/S12/S14/S15（类别和检测过滤）→ S18/S19/S21/S22/S23（瞄准和移动边界）→ S24/S25/S26/S27/S28/S30（扳机和点击释放）→ S34/S35/S36/S37（暂停/重载）→ S38–S42（异常场景）。
 
-**当前验证边界**：已完成源码静态检查和 CUDA Release 构建检查；历史文档记录的 DML 构建检查与当前源码状态不符（当前 CMake 不支持 DML）。尚未连接真实游戏和鼠标硬件，三热键物理按键抢占、动态范围收缩时序、内部扳机边界和实际开火/释放仍需现场运行测试。
+**当前验证边界**：已完成源码静态检查和 CUDA Release 构建检查；DML 构建不做验证（当前 CMake 不支持 DML）。尚未连接真实游戏和鼠标硬件，三热键物理按键抢占、动态范围收缩时序、内部扳机边界和实际开火/释放仍需现场运行测试。
 
 ---
 
@@ -248,7 +248,7 @@ globalTriggerEnabled
 
 ## 12. 已确认的 P0–P2 问题（含源码位置）
 
-以下条目记录已确认问题及其修复状态。详见 [docs/archive/diagnostics/source-simulation-findings-2026-07.txt](docs/archive/diagnostics/source-simulation-findings-2026-07.txt)（历史诊断记录）。产品语义以 [IMPLEMENTATION_SPEC.md](docs/IMPLEMENTATION_SPEC.md) 为准。
+以下条目记录已确认问题及其修复状态。产品语义以 [IMPLEMENTATION_SPEC.md](docs/IMPLEMENTATION_SPEC.md) 为准。
 
 ### 已修复 P0：自动扳机区域判断符合权威规范
 
@@ -293,7 +293,7 @@ Arduino、KmboxA、Makcu 等后端仅检查 `isOpen()`，底层发送失败后�
 ## 14. 源码修改约定
 
 - 修改 config 或检测代码时，检查 CUDA 后端路径；`USE_CUDA` 宏由 CMake 无条件定义，无需条件编译分支切换。
-- UI 显示、配置保存、运行时计算、调试绘制必须使用同一套语义——不能只隐藏控件而保留旧逻辑，也不能只改配置名称而不接入最终鼠标移动路径。
+- UI 显示、配置保存、运行时计算、调试绘制必须使用同一套语义——不能只隐藏控件而不接入最终鼠标移动路径，也不能只改配置名称而不改变实际行为。
 - 视觉调试开关（绘制预测位置、轨迹曲线、触发矩形绘制、目标框显示）只影响 UI 显示，不得改变瞄准、锁定或扳机行为。
 - 速度计算参数关系约束：`近距半径 <= 吸附半径`、`最小速度倍率 <= 最大速度倍率`、`速度曲线指数 > 0`、`吸附加速倍数 >= 0`。
 - 不要在已有构建目录中切换 CMake 生成器；不要用 `Remove-Item -Recurse` 删除构建目录，除非已确认需要完全重新配置。

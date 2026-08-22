@@ -84,3 +84,7 @@ __pycache__/
 /.claude/
 /.opencode/
 *.log
+
+# Internal maintenance documents, not part of public GitHub scope
+/docs/archive/
+/docs/PROJECT_FILE_DISPOSITION.md
