@@ -1,0 +1,259 @@
+﻿【历史诊断记录，非权威参考】
+本文件记录 2026-07 源码模拟检查结果，已归档至 docs/archive/diagnostics/。
+文中记录的 P0/P1/P2 问题已确认修复，修复状态见 AGENTS.md §12。
+当前产品行为规范以 docs/IMPLEMENTATION_SPEC.md 为准。
+
+---
+
+已根据 [SOURCE_LOGIC_SIMULATION_TEST_PLAN.md](/D:/TRAE_Project/Jinn_aimbot/mybot-main/docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md) 完成源码级模拟检查。本轮没有修改代码。
+
+## 已确认的问题
+
+### 1. 自动扳机区域使用“准心是否在区域内”，不是“目标是否在区域内”
+
+位置：
+
+- `runtime/trigger_system.cpp:99-105`
+- `runtime/trigger_system.cpp:58-70`
+
+当前逻辑：
+
+```cpp
+calculateTriggerZone(...)
+isCrosshairInsideTriggerZone(zone, detectionWidth, detectionHeight)
+```
+
+`isCrosshairInsideTriggerZone()` 检查的是固定屏幕中心：
+
+```cpp
+const float cx = detectionWidth * 0.5f;
+const float cy = detectionHeight * 0.5f;
+```
+
+因此，目标框即使完全位于扳机区域之外，只要扳机区域覆盖屏幕中心，仍可能被判断为在扳机区域内。
+
+**用户可见影响：**
+
+- 目标不在准心附近时可能触发自动扳机。
+- 扳机区域的 UI 文案容易让用户理解成“目标进入区域”，但实际判断是“屏幕中心落入由目标框生成的区域”。
+- S24-S29 等自动扳机场景需要重点确认这一行为是否符合设计意图。
+
+这是本轮发现的最高优先级逻辑问题。
+
+---
+
+### 2. 扳机状态机的 `KeyDelay` 在目标出现前就开始计时
+
+位置：
+
+- `runtime/trigger_system.cpp:128-137`
+
+当前逻辑在 `slotActive` 后，无论目标是否存在，都会从 `Idle` 进入 `KeyDelay`：
+
+```cpp
+case TriggerPhase::Idle:
+    if (cfg.key_delay_ms > 0) {
+        st.phase = TriggerPhase::KeyDelay;
+        st.phaseStart = now;
+    }
+```
+
+**模拟场景：**
+
+```text
+t=0ms    热键按下，但没有目标
+t=50ms   key_delay_ms 到期
+t=100ms  目标才出现
+```
+
+此时目标出现时，按键延迟已经结束，后续可能很快进入扳机流程。
+
+**用户预期通常是：**
+
+```text
+目标进入有效区域后，才开始计算 key_delay_ms
+```
+
+当前实现是：
+
+```text
+热键按下后，无论有没有目标，先计算 key_delay_ms
+```
+
+这可能导致自动扳机比用户设置的延迟更早触发。
+
+---
+
+### 3. 目标丢失时，扳机状态没有立即回到安全状态
+
+位置：
+
+- `runtime/trigger_system.cpp:107-123`
+- `runtime/trigger_system.cpp:182-205`
+
+目标离开区域后，代码会设置：
+
+```cpp
+st.targetLost = true;
+st.targetLostTime = now;
+```
+
+但在 `Firing` 阶段，只有达到：
+
+```cpp
+elapsed >= cfg.stop_fire_delay_ms
+```
+
+之后才回到 `Armed`。
+
+这本身符合“目标丢失停火延迟”的设计，但需要注意：
+
+- 在 `PreFireDelay` 阶段目标丢失时会直接回到 `Armed`。
+- 在 `Firing` 阶段只有 `TriggerSystem::update()` 被持续调用时，停火计时才会继续。
+- 如果 `autoShoot` 在中途变为 `false`，外层调用 `releaseMouse()`，但 `triggerSystem.resetAll()` 只在 `config.auto_shoot` 状态变化时执行，存在状态同步依赖。
+
+建议后续补充测试：
+
+```text
+目标丢失 + autoShoot 关闭
+目标丢失 + 热键释放
+目标丢失 + 输入设备断开
+```
+
+本条属于高风险状态同步问题，当前未直接判定为必现 Bug。
+
+---
+
+### 4. `releaseMouse()` 在底层 `leftUp()` 失败时会一直保持 `mouse_pressed = true`
+
+位置：
+
+- `mouse/mouse.cpp:792-805`
+
+当前逻辑：
+
+```cpp
+if (mouseInput->leftUp())
+    mouse_pressed = false;
+```
+
+如果设备已经断开、底层释放失败或设备返回 `false`：
+
+```text
+mouse_pressed 保持 true
+```
+
+之后的所有逻辑都会认为鼠标仍处于按下状态。
+
+**用户可见影响：**
+
+- 后续重新连接设备后可能无法重新执行正常的 `leftDown()`。
+- 扳机状态与真实硬件状态不一致。
+- 设备断开后可能出现“程序认为仍在开火”的状态残留。
+
+相关测试场景：
+
+- S27：持续射击阶段目标消失。
+- S30：左键按下/释放配对。
+- S31：输入设备断开。
+
+这是确认存在的状态清理风险。
+
+---
+
+### 5. 非 WIN32 设备的 `move()` / 按键函数可能报告成功，但底层发送失败
+
+位置：
+
+- `mouse/MouseInput.cpp:88-109`
+- `mouse/MouseInput.cpp:138-160`
+- `mouse/MouseInput.cpp:467-504`
+- `mouse/MouseInput.cpp:518-554`
+
+例如 Arduino：
+
+```cpp
+device_->move(dx, dy);
+return true;
+```
+
+KmboxA 和 Makcu 也有类似模式：只检查 `isOpen()`，调用底层操作后直接返回 `true`。
+
+**用户可见影响：**
+
+- 底层串口/HID/设备发送失败时，上层仍认为移动或点击成功。
+- 测试日志和状态可能显示成功，但鼠标没有实际动作。
+- 自动扳机可能认为 `leftDown()` 已成功，后续不会重试或重新同步。
+
+这是硬件后端可靠性问题，当前没有真实硬件，因此属于源码确认的潜在 Bug，需要设备实测确认影响程度。
+
+---
+
+## 其他场景结果
+
+### 热键优先级
+
+`Config::selectActiveMouseHotkey()` 的逻辑清晰：
+
+```cpp
+priority 越小，优先级越高
+priority 相同时，creationOrder 越小优先
+```
+
+S04、S05、S06、S08 的预期行为基本一致。
+
+### 热键禁用与空 ID
+
+位置：
+
+```text
+config/config.cpp:107-110
+keyboard/keyboard_listener.cpp:161-163
+```
+
+以下热键会被跳过：
+
+- `enabled == false`
+- `id.empty()`
+- `buttons.empty()`
+
+这部分符合预期。
+
+### 最后一个类别不能关闭
+
+`draw_ai.cpp` 和热键类别 UI 中都有最少保留一个类别的限制，S09-S13 的基本逻辑符合预期。
+
+### 方向键边界
+
+`keyboard_listener.cpp:341-363` 使用了 `std::max` 和 `std::min`：
+
+```cpp
+aim_offset_x/y 始终限制在 0.0 到 1.0
+```
+
+S37 逻辑符合预期。
+
+### 输入设备未连接
+
+大多数后端在 `isOpen() == false` 时会阻止移动和按键操作，S31 的基本防护存在。
+
+## 未能完全确认的场景
+
+以下场景需要真实或专门的 Fake 对象才能最终判定：
+
+- 真实多个热键同时按下。
+- 真实目标进入/离开扳机区域。
+- 真实 `leftDown()` / `leftUp()` 的设备反馈。
+- 串口/HID/GHUB/Kmbox/Makcu 的底层发送失败。
+- 高负载下键盘线程与鼠标线程的竞态。
+- 真实检测帧时间戳和目标追踪丢帧。
+
+## 建议修复优先级
+
+1. **P0**：确认自动扳机区域到底应该判断“目标框”还是“准心”，修正 `isCrosshairInsideTriggerZone()` 的语义或调用方式。
+2. **P1**：让 `key_delay_ms` 从目标满足条件时开始计时，而不是热键刚按下时开始。
+3. **P1**：设备断开或 `leftUp()` 失败时，确保 `mouse_pressed` 能回到安全状态。
+4. **P2**：让 Arduino、KmboxA、Makcu 等后端传递底层发送失败结果，不要无条件返回成功。
+5. **P2**：补充 `autoShoot` 关闭、热键释放、目标丢失、设备断开之间的状态机测试。
+
+本轮只完成了源码模拟和问题定位，没有修改功能代码。

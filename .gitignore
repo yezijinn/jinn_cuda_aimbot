@@ -1,0 +1,81 @@
+# Build outputs and logs
+/build/
+/build_cuda/
+/build_*/
+build_current.log
+build_current_last.log
+cmake-build-*/
+CMakeUserPresets.json
+
+# CMake / Ninja
+[Cc]MakeCache.txt
+[Cc]MakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+/Testing/
+.ninja_deps
+.ninja_log
+build.ninja
+
+# Binaries and intermediate artifacts
+*.exe
+*.dll
+*.pdb
+*.exp
+*.ilk
+*.lib
+*.a
+*.so
+*.dylib
+*.obj
+*.o
+*.out
+*.app
+*.slo
+*.lo
+*.gch
+*.pch
+*.mod
+*.smod
+*.lai
+*.la
+
+# Local SDK / third-party build trees
+/CUDA.TensorRT/
+/modules/opencv/
+/modules/_downloads/
+/packages/
+/tools/.bin/
+/onnxruntime-win-x64-*/
+/onnxruntime-*/
+
+# Models and runtime data
+/models/
+/depth_models/
+*.engine
+*.onnx
+/config.ini
+/benchmark_results/
+**/screenshots/
+/x64/
+/mybot/x64/
+
+# IDE / OS
+.vs/
+.idea/
+*.suo
+*.user
+Thumbs.db
+Desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Verification and local agent artifacts
+/.verify/
+/.claude/
+/.opencode/
+*.log
