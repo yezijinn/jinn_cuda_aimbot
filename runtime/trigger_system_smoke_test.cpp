@@ -105,10 +105,14 @@ int main()
     config.stop_fire_on_loss = false;
     system.resetAll();
     system.updateConfig(config, TriggerConfig{}, TriggerConfig{});
-    expect(!update(system, inZoneBox), "armed before disabled-loss test");
-    expect(update(system, inZoneBox), "fires before disabled-loss test");
+    TriggerConfig sanitized = config;
+    TriggerSystem::sanitizeConfig(sanitized);
+    expect(sanitized.stop_fire_on_loss, "sanitizeConfig forces target-loss stop enabled");
+    expect(!update(system, inZoneBox), "armed before sanitized-loss test");
+    expect(update(system, inZoneBox), "fires before sanitized-loss test");
+    expect(update(system, nullptr), "holds fire during sanitized target-loss delay");
     std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    expect(update(system, nullptr), "continues firing when target-loss stop is disabled");
+    expect(!update(system, nullptr), "stops firing when sanitizeConfig forces target-loss stop");
 
     std::cout << "PASS: trigger timing and target-loss behavior\n";
 }

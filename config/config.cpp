@@ -689,7 +689,7 @@ bool Config::loadConfig(const std::string& filename)
     // Trigger (per-hotkey)
     trigger_targeting.enabled = get_bool("trigger_targeting_enabled", false);
     trigger_targeting.continuous = get_bool("trigger_targeting_continuous", false);
-    trigger_targeting.stop_fire_on_loss = get_bool("trigger_targeting_stop_fire_on_loss", true);
+    trigger_targeting.stop_fire_on_loss = true;
     trigger_targeting.stop_fire_delay_ms = get_long("trigger_targeting_stop_fire_delay_ms", 200);
     trigger_targeting.key_delay_ms = get_long("trigger_targeting_key_delay_ms", 50);
     trigger_targeting.pre_fire_delay_ms = get_long("trigger_targeting_pre_fire_delay_ms", 100);
@@ -704,7 +704,7 @@ bool Config::loadConfig(const std::string& filename)
 
     trigger_shoot.enabled = get_bool("trigger_shoot_enabled", false);
     trigger_shoot.continuous = get_bool("trigger_shoot_continuous", false);
-    trigger_shoot.stop_fire_on_loss = get_bool("trigger_shoot_stop_fire_on_loss", true);
+    trigger_shoot.stop_fire_on_loss = true;
     trigger_shoot.stop_fire_delay_ms = trigger_targeting.stop_fire_delay_ms;
     trigger_shoot.key_delay_ms = trigger_targeting.key_delay_ms;
     trigger_shoot.pre_fire_delay_ms = trigger_targeting.pre_fire_delay_ms;
@@ -719,7 +719,7 @@ bool Config::loadConfig(const std::string& filename)
 
     trigger_zoom.enabled = get_bool("trigger_zoom_enabled", false);
     trigger_zoom.continuous = get_bool("trigger_zoom_continuous", false);
-    trigger_zoom.stop_fire_on_loss = get_bool("trigger_zoom_stop_fire_on_loss", true);
+    trigger_zoom.stop_fire_on_loss = true;
     trigger_zoom.stop_fire_delay_ms = trigger_targeting.stop_fire_delay_ms;
     trigger_zoom.key_delay_ms = trigger_targeting.key_delay_ms;
     trigger_zoom.pre_fire_delay_ms = trigger_targeting.pre_fire_delay_ms;
@@ -1175,7 +1175,7 @@ bool Config::saveConfig(const std::string& filename)
     file << "# Trigger - Targeting\n"
         << "trigger_targeting_enabled = " << (trigger_targeting.enabled ? "true" : "false") << "\n"
         << "trigger_targeting_continuous = " << (trigger_targeting.continuous ? "true" : "false") << "\n"
-        << "trigger_targeting_stop_fire_on_loss = " << (trigger_targeting.stop_fire_on_loss ? "true" : "false") << "\n"
+        << "trigger_targeting_stop_fire_on_loss = true\n"
         << "trigger_targeting_stop_fire_delay_ms = " << trigger_targeting.stop_fire_delay_ms << "\n"
         << "trigger_targeting_key_delay_ms = " << trigger_targeting.key_delay_ms << "\n"
         << "trigger_targeting_pre_fire_delay_ms = " << trigger_targeting.pre_fire_delay_ms << "\n"
@@ -1193,7 +1193,7 @@ bool Config::saveConfig(const std::string& filename)
     file << "# Trigger - Shoot\n"
         << "trigger_shoot_enabled = " << (trigger_shoot.enabled ? "true" : "false") << "\n"
         << "trigger_shoot_continuous = " << (trigger_shoot.continuous ? "true" : "false") << "\n"
-        << "trigger_shoot_stop_fire_on_loss = " << (trigger_shoot.stop_fire_on_loss ? "true" : "false") << "\n"
+        << "trigger_shoot_stop_fire_on_loss = true\n"
         << "trigger_shoot_stop_fire_delay_ms = " << trigger_shoot.stop_fire_delay_ms << "\n"
         << "trigger_shoot_key_delay_ms = " << trigger_shoot.key_delay_ms << "\n"
         << "trigger_shoot_pre_fire_delay_ms = " << trigger_shoot.pre_fire_delay_ms << "\n"
@@ -1211,7 +1211,7 @@ bool Config::saveConfig(const std::string& filename)
     file << "# Trigger - Zoom\n"
         << "trigger_zoom_enabled = " << (trigger_zoom.enabled ? "true" : "false") << "\n"
         << "trigger_zoom_continuous = " << (trigger_zoom.continuous ? "true" : "false") << "\n"
-        << "trigger_zoom_stop_fire_on_loss = " << (trigger_zoom.stop_fire_on_loss ? "true" : "false") << "\n"
+        << "trigger_zoom_stop_fire_on_loss = true\n"
         << "trigger_zoom_stop_fire_delay_ms = " << trigger_zoom.stop_fire_delay_ms << "\n"
         << "trigger_zoom_key_delay_ms = " << trigger_zoom.key_delay_ms << "\n"
         << "trigger_zoom_pre_fire_delay_ms = " << trigger_zoom.pre_fire_delay_ms << "\n"

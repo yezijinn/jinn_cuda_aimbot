@@ -233,24 +233,6 @@ Use `None` to disable a button where supported.
 | `overlay_width` | `760` | Overlay editor window width. Auto-saved after resizing. |
 | `overlay_height` | `480` | Overlay editor window height. Auto-saved after resizing. |
 
-## Depth
-
-The following depth-related keys are not present in the current config schema. They may appear in experimental or unsupported configs but are not actively loaded or saved by the current build.
-
-| Key | Reference Default | Meaning |
-|---|---:|---|
-| `depth_inference_enabled` | `true` | Enables depth inference feature. |
-| `depth_model_path` | `depth_anything_v2.engine` | Depth model path. |
-| `depth_fps` | `100` | Depth update FPS. Minimum `0`. |
-| `depth_colormap` | `18` | OpenCV colormap index. Clamped `0..21`. |
-| `depth_mask_enabled` | `false` | Enables depth mask. |
-| `depth_mask_fps` | `5` | Depth mask update FPS. Minimum `0`. |
-| `depth_mask_near_percent` | `20` | Near-depth percent. Clamped `1..100`. |
-| `depth_mask_expand` | `0` | Expand mask pixels. Clamped `0..128`. |
-| `depth_mask_hold_frames` | `0` | Hold mask for extra frames. Clamped `0..120`. |
-| `depth_mask_alpha` | `90` | Mask alpha. Clamped `0..255`. |
-| `depth_mask_invert` | `false` | Inverts depth mask. |
-| `depth_debug_overlay_enabled` | `false` | Shows depth debug overlay. |
 
 ## Game Overlay
 

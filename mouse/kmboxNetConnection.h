@@ -50,6 +50,7 @@ public:
     int monitorMouseSide1();
     int monitorMouseSide2();
     int monitorKeyboard(short vkey);
+    bool monitorReady() const;
 
     void maskMouseLeft(bool enable);
     void maskMouseRight(bool enable);

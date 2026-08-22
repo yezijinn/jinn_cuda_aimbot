@@ -446,7 +446,7 @@ static void draw_mouse_page(MouseSettingsPage page)
     {
         ImGui::PushID("mouse_section_input_method");
         // 常量表改为 static，避免每帧构造 2 个 vector<std::string>（8 次堆分配）。
-        static const char* const kInputMethodLabels[] = { "WIN32(标准)", "KmboxNet", "KmboxA", "Makcu" };
+        static const char* const kInputMethodLabels[] = { "WIN32(系统)", "KmboxNet", "KmboxA", "Makcu" };
         static const char* const kInputMethodValues[] = { "WIN32", "KMBOX_NET", "KMBOX_A", "MAKCU" };
         static constexpr int kInputMethodCount = static_cast<int>(IM_ARRAYSIZE(kInputMethodLabels));
         static_assert(IM_ARRAYSIZE(kInputMethodLabels) == IM_ARRAYSIZE(kInputMethodValues),
@@ -483,7 +483,7 @@ static void draw_mouse_page(MouseSettingsPage page)
 
         if (config.input_method == "WIN32")
         {
-            ImGui::Text("标准鼠标输入方式。建议用 Kmbox 或 Makcu 后端。");
+            ImGui::Text("系统原生的鼠标输入方式。建议用 Kmbox 或 Makcu 后端。");
             ImGui::TextDisabled("有风险，此方法可能被检测。");
         }
         else if (config.input_method == "KMBOX_NET")
@@ -1061,7 +1061,7 @@ void draw_hotkey_profile(std::size_t slot)
         ImGui::GetStyle().ItemInnerSpacing.x * 2.0f + ImGui::CalcTextSize("自动瞄准开关").x +
         ImGui::CalcTextSize("保持目标锁定").x + ImGui::GetStyle().ItemSpacing.x;
     const bool fitAimControlCheckboxes = ImGui::GetContentRegionAvail().x >= aimControlCheckboxWidth;
-    if (ImGui::Checkbox("自动瞄准的总开关", &localAutoAim))
+    if (ImGui::Checkbox("勾选=不用按键，自动对准。不勾=按住热键，才会对准。", &localAutoAim))
     {
         profile.setLocalBool("auto_aim", localAutoAim);
         OverlayConfig_MarkDirty();
@@ -1115,36 +1115,36 @@ void draw_hotkey_profile(std::size_t slot)
 
         if (ImGui::TreeNodeEx("X 轴调参", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("追踪强度 tracking", "x_track", config.mc_x_tracking, 2.0f, 6.0f, 0.5f);
-            mcFloat("震荡抑制 damping",  "x_damp", config.mc_x_damping, 0.02f, 0.12f, 0.01f);
-            mcFloat("最大速度 maxSpeed", "x_speed", config.mc_x_maxspeed, 800.0f, 3000.0f, 100.0f);
-            mcFloat("积分增益 integral", "x_int", config.mc_x_integral, 0.0f, 2.0f, 0.05f);
-            mcFloat("死区 deadzone",     "x_dz", config.mc_x_deadzone, 1.0f, 5.0f, 1.0f);
+            mcFloat("追踪强度 tracking", "x_track", config.mc_x_tracking, 1.0f, 999.0f, 0.1f);
+            mcFloat("震荡抑制 damping",  "x_damp", config.mc_x_damping, 0.01f, 0.99f, 0.01f);
+            mcFloat("最大速度 maxSpeed", "x_speed", config.mc_x_maxspeed, 100.0f, 9999.0f, 10.0f);
+            mcFloat("积分增益 integral", "x_int", config.mc_x_integral, 0.0f, 999.0f, 0.1f);
+            mcFloat("死区 deadzone",     "x_dz", config.mc_x_deadzone, 0.0f, 999.0f, 1.0f);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Y 轴调参", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("追踪强度 tracking", "y_track", config.mc_y_tracking, 2.0f, 6.0f, 0.5f);
-            mcFloat("震荡抑制 damping",  "y_damp", config.mc_y_damping, 0.02f, 0.12f, 0.01f);
-            mcFloat("最大速度 maxSpeed", "y_speed", config.mc_y_maxspeed, 800.0f, 3000.0f, 100.0f);
-            mcFloat("积分增益 integral", "y_int", config.mc_y_integral, 0.0f, 2.0f, 0.05f);
-            mcFloat("死区 deadzone",     "y_dz", config.mc_y_deadzone, 1.0f, 5.0f, 1.0f);
+            mcFloat("追踪强度 tracking", "y_track", config.mc_y_tracking, 1.0f, 999.0f, 0.1f);
+            mcFloat("震荡抑制 damping",  "y_damp", config.mc_y_damping, 0.01f, 0.99f, 0.01f);
+            mcFloat("最大速度 maxSpeed", "y_speed", config.mc_y_maxspeed, 100.0f, 9999.0f, 10.0f);
+            mcFloat("积分增益 integral", "y_int", config.mc_y_integral, 0.0f, 999.0f, 0.1f);
+            mcFloat("死区 deadzone",     "y_dz", config.mc_y_deadzone, 0.0f, 999.0f, 1.0f);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("全局参数", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("单帧最大移动 maxStepPerFrame", "g_maxstep", config.mc_maxstep, 15.0f, 50.0f, 5.0f);
-            mcFloat("重瞄准阈值 retargetThreshold",  "g_retarget", config.mc_retarget, 10.0f, 200.0f, 5.0f);
+            mcFloat("单帧最大移动 maxStepPerFrame", "g_maxstep", config.mc_maxstep, 1.0f, 999.0f, 5.0f);
+            mcFloat("重瞄准阈值 retargetThreshold",  "g_retarget", config.mc_retarget, 1.0f, 999.0f, 5.0f);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("算法参数", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("自适应前瞻 最小(s)", "a_min", config.mc_ahead_min, 0.02f, 0.15f, 0.01f);
-            mcFloat("自适应前瞻 最大(s)", "a_max", config.mc_ahead_max, 0.05f, 0.30f, 0.01f);
-            mcFloat("轨迹时长 最小(s)",   "d_min", config.mc_dur_min, 0.10f, 0.60f, 0.01f);
-            mcFloat("轨迹时长 最大(s)",   "d_max", config.mc_dur_max, 0.15f, 1.00f, 0.01f);
-            mcFloat("Kalman 过程噪声 q",  "k_q", config.mc_kalman_q, 100.0f, 5000.0f, 100.0f);
-            mcFloat("Kalman 测量噪声 r",  "k_r", config.mc_kalman_r, 5.0f, 200.0f, 5.0f);
+            mcFloat("自适应前瞻 最小(s)", "a_min", config.mc_ahead_min, 0.01f, 1.00f, 0.01f);
+            mcFloat("自适应前瞻 最大(s)", "a_max", config.mc_ahead_max, 0.01f, 1.00f, 0.01f);
+            mcFloat("轨迹时长 最小(s)",   "d_min", config.mc_dur_min, 0.01f, 1.00f, 0.01f);
+            mcFloat("轨迹时长 最大(s)",   "d_max", config.mc_dur_max, 0.01f, 1.00f, 0.01f);
+            mcFloat("Kalman 过程噪声 q",  "k_q", config.mc_kalman_q, 1.0f, 9999.0f, 100.0f);
+            mcFloat("Kalman 测量噪声 r",  "k_r", config.mc_kalman_r, 1.0f, 9999.0f, 5.0f);
             ImGui::TreePop();
         }
     }
@@ -1344,8 +1344,7 @@ void draw_hotkey_profile(std::size_t slot)
         }
         bool enabledForHotkey = profile.localBool("trigger_enabled_for_hotkey", true);
         if (ImGui::Checkbox("正式启用此热键扳机", &enabledForHotkey)) { profile.setLocalBool("trigger_enabled_for_hotkey", enabledForHotkey); OverlayConfig_MarkDirty(); }
-        bool stopOnLoss = profile.localBool("trigger_stop_fire_on_loss", trigger.stop_fire_on_loss);
-        if (ImGui::Checkbox("目标丢失时停止开火", &stopOnLoss)) { profile.setLocalBool("trigger_stop_fire_on_loss", stopOnLoss); OverlayConfig_MarkDirty(); }
+        ImGui::TextDisabled("目标丢失时停止开火：内部强制启用");
         localIntInput("目标丢失时，松开火键的延迟(ms)", "trigger_targeting_stop_fire_delay_ms", 0, 5000, trigger.stop_fire_delay_ms);
         localIntInput("目标出现时，按开火键的延迟(ms)", "trigger_targeting_key_delay_ms", 0, 5000, trigger.key_delay_ms);
         localIntInput("前摇延迟(ms)", "trigger_targeting_pre_fire_delay_ms", 0, 5000, trigger.pre_fire_delay_ms);

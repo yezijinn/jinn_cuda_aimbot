@@ -186,6 +186,22 @@ void keyboardListener()
                 }
             }
         }
+
+        int continuousTriggerSlot = -1;
+        for (std::size_t i = 0; i < cfg.mouseHotkeys.size(); ++i)
+        {
+            const auto& hotkey = cfg.mouseHotkeys[i];
+            if (hotkey.id.empty() || !hotkey.enabled)
+                continue;
+            if (hotkey.localBool("trigger_enabled", false) &&
+                hotkey.localBool("trigger_enabled_for_hotkey", true) &&
+                hotkey.localBool("trigger_continuous", false))
+            {
+                continuousTriggerSlot = static_cast<int>(i);
+                break;
+            }
+        }
+
         const bool selectedProfileAutoAim = activeMouseHotkey != nullptr &&
             activeMouseHotkey->localBool("auto_aim", false);
         // 仅当槽 0（默认回退）本身处于启用状态时才采纳其 auto_aim；否则一个被禁用的
@@ -196,6 +212,8 @@ void keyboardListener()
         const bool continuousAim = cfg.autoAim || selectedProfileAutoAim ||
             (activeMouseHotkey == nullptr && slot1AutoAim);
 
+        if (activeSlot < 0 && continuousTriggerSlot >= 0)
+            activeSlot = continuousTriggerSlot;
         // 先把最终槽位算完，再单次发布。
         // 原实现是"先 store(activeSlot)，若需回退再 store(0)"的两阶段写法，中间会短暂
         // 出现 -1 这个错误值。而 active_mouse_hotkey_slot 的读取方是 1000Hz 级的鼠标线程

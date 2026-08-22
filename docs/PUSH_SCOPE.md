@@ -40,7 +40,7 @@
 |---|---|
 | 构建产物 | `/build/`、`/build_cuda/`、`*.exe`、`*.dll`、`*.pdb`、`.ninja_*`、`CMakeCache.txt` |
 | 本地 SDK/依赖树 | `/CUDA.TensorRT/`、`/modules/opencv/`、`/modules/_downloads/`、`/packages/`、D 盘父目录的 `onnxruntime-win-x64-1.28.0` |
-| 运行时数据 | `/models/`、`/depth_models/`、`*.engine`、`*.onnx`、`config.ini`、截图 |
+| 运行时数据 | `/models/`、`*.engine`、`*.onnx`、`config.ini`、截图 |
 | 日志与临时内容 | `build_current.log`、`build_current_last.log`、`*.log`、`/temp/`、D 盘根目录的 `logs/` |
 | 本地工具配置 | `.vs/`、`.idea/`、`.verify/`、`.claude/`、`.opencode/`、`tools/.bin/` |
 | 敏感信息 | `.env`、`*.pem`、`*key*`、`*token*`、`*password*`、账号 Cookie、私人对话内容、设备序列号 |

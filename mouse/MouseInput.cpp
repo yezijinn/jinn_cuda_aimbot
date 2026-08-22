@@ -60,6 +60,55 @@ bool logicalButtonPressed(
     return false;
 }
 
+int win32MouseVirtualKey(const std::string& keyName)
+{
+    if (keyName == "LeftMouseButton")   return VK_LBUTTON;
+    if (keyName == "RightMouseButton")  return VK_RBUTTON;
+    if (keyName == "MiddleMouseButton") return VK_MBUTTON;
+    if (keyName == "X1MouseButton")     return VK_XBUTTON1;
+    if (keyName == "X2MouseButton")     return VK_XBUTTON2;
+    return -1;
+}
+
+bool win32MouseButtonHeld(const std::string& keyName)
+{
+    const int vk = win32MouseVirtualKey(keyName);
+    return vk != -1 && (GetAsyncKeyState(vk) & 0x8000) != 0;
+}
+
+bool kmboxOrWin32MouseHeld(KmboxNetConnection* device, const std::string& keyName)
+{
+    if (device && device->monitorReady())
+    {
+        if (keyName == "LeftMouseButton")
+            return device->monitorMouseLeft() == 1 || win32MouseButtonHeld(keyName);
+        if (keyName == "RightMouseButton")
+            return device->monitorMouseRight() == 1 || win32MouseButtonHeld(keyName);
+        if (keyName == "MiddleMouseButton")
+            return device->monitorMouseMiddle() == 1 || win32MouseButtonHeld(keyName);
+        if (keyName == "X1MouseButton")
+            return device->monitorMouseSide1() == 1 || win32MouseButtonHeld(keyName);
+        if (keyName == "X2MouseButton")
+            return device->monitorMouseSide2() == 1 || win32MouseButtonHeld(keyName);
+        return false;
+    }
+    return win32MouseButtonHeld(keyName);
+}
+
+bool kmboxPhysicalMouseHeldOrWin32(KmboxNetConnection* device, const std::string& keyName)
+{
+    if (device && device->monitorReady())
+    {
+        if (keyName == "LeftMouseButton")   return device->monitorMouseLeft() == 1;
+        if (keyName == "RightMouseButton")  return device->monitorMouseRight() == 1;
+        if (keyName == "MiddleMouseButton") return device->monitorMouseMiddle() == 1;
+        if (keyName == "X1MouseButton")     return device->monitorMouseSide1() == 1;
+        if (keyName == "X2MouseButton")     return device->monitorMouseSide2() == 1;
+        return false;
+    }
+    return win32MouseButtonHeld(keyName);
+}
+
 bool sendWin32Move(int dx, int dy)
 {
     INPUT input{ 0 };
@@ -80,16 +129,59 @@ bool sendWin32Click(DWORD flag)
     return SendInput(1, &input, sizeof(INPUT)) == 1;
 }
 
+bool win32SoftwareClick(bool& softwarePressed, DWORD flag, const std::string& keyName)
+{
+    if (softwarePressed)
+        return true;
+    if (win32MouseButtonHeld(keyName))
+    {
+        return true;
+    }
+    if (!sendWin32Click(flag))
+        return false;
+    softwarePressed = true;
+    return true;
+}
+
+bool win32SoftwareRelease(bool& softwarePressed, DWORD flag)
+{
+    if (!softwarePressed)
+        return true;
+    if (!sendWin32Click(flag))
+        return false;
+    softwarePressed = false;
+    return true;
+}
+
 class Win32MouseInput final : public IMouseInput
 {
 public:
     const char* name() const override { return "WIN32"; }
     bool isOpen() const override { return true; }
     bool move(int dx, int dy) override { return sendWin32Move(dx, dy); }
-    bool leftDown() override { return sendWin32Click(MOUSEEVENTF_LEFTDOWN); }
-    bool leftUp() override { return sendWin32Click(MOUSEEVENTF_LEFTUP); }
-    bool rightDown() override { return sendWin32Click(MOUSEEVENTF_RIGHTDOWN); }
-    bool rightUp() override { return sendWin32Click(MOUSEEVENTF_RIGHTUP); }
+    bool leftDown() override { return win32SoftwareClick(softwareLeftPressed_, MOUSEEVENTF_LEFTDOWN, "LeftMouseButton"); }
+    bool leftUp() override { return win32SoftwareRelease(softwareLeftPressed_, MOUSEEVENTF_LEFTUP); }
+    bool rightDown() override { return win32SoftwareClick(softwareRightPressed_, MOUSEEVENTF_RIGHTDOWN, "RightMouseButton"); }
+    bool rightUp() override { return win32SoftwareRelease(softwareRightPressed_, MOUSEEVENTF_RIGHTUP); }
+
+    bool hasPhysicalButtonState() const override { return true; }
+    bool keyPressed(const std::string& keyName) override
+    {
+        if (win32MouseButtonHeld(keyName))
+            return true;
+        return logicalButtonPressed(
+            keyName,
+            win32MouseButtonHeld("LeftMouseButton"),
+            win32MouseButtonHeld("RightMouseButton"),
+            win32MouseButtonHeld("X2MouseButton"));
+    }
+    bool aimingActive() const override { return win32MouseButtonHeld("X2MouseButton"); }
+    bool shootingActive() const override { return win32MouseButtonHeld("LeftMouseButton"); }
+    bool zoomingActive() const override { return win32MouseButtonHeld("RightMouseButton"); }
+
+private:
+    bool softwareLeftPressed_ = false;
+    bool softwareRightPressed_ = false;
 };
 
 class KmboxNetMouseInput final : public IMouseInput
@@ -216,28 +308,58 @@ public:
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!state_->device || !state_->device->isOpen())
             return false;
-        return state_->device->leftDown();
+        // 用户正物理按住左键时，不新发软件 down；
+        // 若已有软件按下状态则保持不变，避免清掉状态后 release 无法回收。
+        if (kmboxOrWin32MouseHeld(state_->device.get(), "LeftMouseButton"))
+            return true;
+        if (state_->softwareLeftPressed_)
+            return true;
+        if (!state_->device->leftDown())
+            return false;
+        state_->softwareLeftPressed_ = true;
+        return true;
     }
     bool leftUp() override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!state_->device || !state_->device->isOpen())
             return false;
-        return state_->device->leftUp();
+        // 软件左键一旦按下就必须补 release，否则软件状态会长期卡住，表现为
+        // 用户物理松开后鼠标左键仍然被按住。物理按住状态不阻止本次 release。
+        if (!state_->softwareLeftPressed_)
+            return true;
+        if (!state_->device->leftUp())
+            return false;
+        state_->softwareLeftPressed_ = false;
+        return true;
     }
     bool rightDown() override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!state_->device || !state_->device->isOpen())
             return false;
-        return state_->device->rightDown();
+        // 用户正物理按住右键时不下发软件；已有软件按下状态不在此处清掉。
+        if (kmboxOrWin32MouseHeld(state_->device.get(), "RightMouseButton"))
+            return true;
+        if (state_->softwareRightPressed_)
+            return true;
+        if (!state_->device->rightDown())
+            return false;
+        state_->softwareRightPressed_ = true;
+        return true;
     }
     bool rightUp() override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!state_->device || !state_->device->isOpen())
             return false;
-        return state_->device->rightUp();
+        // 程序若已下发软件右键，必须补 release，避免软件状态残留。
+        if (!state_->softwareRightPressed_)
+            return true;
+        if (!state_->device->rightUp())
+            return false;
+        state_->softwareRightPressed_ = false;
+        return true;
     }
     void releaseAllButtons() override
     {
@@ -247,8 +369,14 @@ public:
         // KmboxNetConnection::releaseAllButtons() 内部会自行处理不可用 socket。
         if (state_->device)
             state_->device->releaseAllButtons();
+        state_->softwareLeftPressed_ = false;
+        state_->softwareRightPressed_ = false;
     }
-    bool hasPhysicalButtonState() const override { return true; }
+    bool hasPhysicalButtonState() const override
+    {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        return state_->device && state_->device->monitorReady();
+    }
     bool keyPressed(const std::string& keyName) override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
@@ -256,15 +384,17 @@ public:
         if (!device || !device->isOpen())
             return false;
 
-        if (keyName == "LeftMouseButton" && device->monitorMouseLeft() == 1)
-            return true;
-        if (keyName == "RightMouseButton" && device->monitorMouseRight() == 1)
-            return true;
-        if (keyName == "MiddleMouseButton" && device->monitorMouseMiddle() == 1)
-            return true;
-        if (keyName == "X1MouseButton" && device->monitorMouseSide1() == 1)
-            return true;
-        if (keyName == "X2MouseButton" && device->monitorMouseSide2() == 1)
+        const bool leftHeld = kmboxOrWin32MouseHeld(device, "LeftMouseButton");
+        const bool rightHeld = kmboxOrWin32MouseHeld(device, "RightMouseButton");
+        const bool middleHeld = kmboxOrWin32MouseHeld(device, "MiddleMouseButton");
+        const bool side1Held = kmboxOrWin32MouseHeld(device, "X1MouseButton");
+        const bool side2Held = kmboxOrWin32MouseHeld(device, "X2MouseButton");
+
+        if ((keyName == "LeftMouseButton" && leftHeld) ||
+            (keyName == "RightMouseButton" && rightHeld) ||
+            (keyName == "MiddleMouseButton" && middleHeld) ||
+            (keyName == "X1MouseButton" && side1Held) ||
+            (keyName == "X2MouseButton" && side2Held))
             return true;
 
         // 逻辑按键与物理监控同源：device->shooting_active/zooming_active/aiming_active
@@ -273,31 +403,29 @@ public:
         // 完全一致（侧键2=瞄准、左键=射击、右键=缩放），消除与 Makcu 的行为差异。
         return logicalButtonPressed(
             keyName,
-            device->monitorMouseLeft() == 1,
-            device->monitorMouseRight() == 1,
-            device->monitorMouseSide2() == 1);
+            leftHeld,
+            rightHeld,
+            side2Held);
     }
-    // 原实现直接读 device->aiming_active/shooting_active/zooming_active —— 这三个
-    // 原子量在 KmboxNetConnection 中仅构造时置 false、全项目无任何写入点，因此
-    // isAimingActiveFromDevices()/isShootingActiveFromDevices()/isZoomingActiveFromDevices()
-    // 对 kmboxNet 恒返回 false，与 Makcu（回调写入 *_active）行为不一致。
-    // kmboxNet 的物理按键状态唯一来源是 kmNet 监控镜像（monitorMouseXxx），此处改为
-    // 直接查询物理监控，语义与 keyPressed() 的物理分支一致：侧键2=瞄准、左键=射击、
-    // 右键=缩放。device 未连接时 monitorMouseXxx 返回 -1，==1 恒为 false，行为不变。
+    // kmboxNet 的物理按键优先以 kmNet 监控镜像为准；监控不可达或盒子未就绪时回退
+    // Win32 GetAsyncKeyState，避免用户手动物键因监控短暂失联而整体失效。
     bool aimingActive() const override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
-        return state_->device && state_->device->monitorMouseSide2() == 1;
+        return state_->device && state_->device->isOpen() &&
+            kmboxOrWin32MouseHeld(state_->device.get(), "X2MouseButton");
     }
     bool shootingActive() const override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
-        return state_->device && state_->device->monitorMouseLeft() == 1;
+        return state_->device && state_->device->isOpen() &&
+            kmboxOrWin32MouseHeld(state_->device.get(), "LeftMouseButton");
     }
     bool zoomingActive() const override
     {
         std::lock_guard<std::mutex> lock(state_->mutex);
-        return state_->device && state_->device->monitorMouseRight() == 1;
+        return state_->device && state_->device->isOpen() &&
+            kmboxOrWin32MouseHeld(state_->device.get(), "RightMouseButton");
     }
     KmboxNetConnection* kmboxNet() override
     {
@@ -312,6 +440,8 @@ private:
         std::unique_ptr<KmboxNetConnection> device;
         std::atomic<bool> connecting{ false };
         std::atomic<bool> closed{ false };
+        bool softwareLeftPressed_ = false;
+        bool softwareRightPressed_ = false;
     };
 
     std::shared_ptr<State> state_;

@@ -183,16 +183,19 @@ void mouseThreadFunction(MouseThread& mouseThread)
                 trackerEnabled = profile->localBool("tracker_enabled", trackerEnabled);
                 predictionFuturePositions = std::clamp(
                     profile->localInt("prediction_futurePositions", predictionFuturePositions), 1, 200);
-                autoShoot = config.auto_shoot && profile->localBool("trigger_enabled_for_hotkey", true);
+                const bool triggerEnabled =
+                    profile->localBool("trigger_enabled", config.trigger_targeting.enabled) &&
+                    profile->localBool("trigger_enabled_for_hotkey", true);
+                autoShoot = triggerEnabled;
             }
 
             // Update trigger system config
-            if (prevTriggerMasterEnabled != config.auto_shoot)
+            if (prevTriggerMasterEnabled != autoShoot)
             {
-                prevTriggerMasterEnabled = config.auto_shoot;
+                prevTriggerMasterEnabled = autoShoot;
                 triggerSystem.resetAll();
             }
-            if (config.auto_shoot)
+            if (autoShoot)
             {
                 targetingConfig = config.trigger_targeting;
                 shootConfig = config.trigger_shoot;
@@ -205,7 +208,9 @@ void mouseThreadFunction(MouseThread& mouseThread)
                     targetingConfig.enabled = profile.localBool("trigger_enabled", targetingConfig.enabled) &&
                                               profile.localBool("trigger_enabled_for_hotkey", true);
                     targetingConfig.continuous = profile.localBool("trigger_continuous", targetingConfig.continuous);
-                    targetingConfig.stop_fire_on_loss = profile.localBool("trigger_stop_fire_on_loss", targetingConfig.stop_fire_on_loss);
+                    targetingConfig.stop_fire_on_loss = true;
+                    shootConfig.stop_fire_on_loss = true;
+                    zoomConfig.stop_fire_on_loss = true;
                     // 钳制区间与 config.cpp loadConfig 的 TriggerConfig clamp 完全对齐。
                     // localInt 用 std::stoi 解析, config.ini 手改负值可绕过 UI 校验注入,
                     // 其中 fire_duration_random_ms / cooldown_random_ms 为负会令

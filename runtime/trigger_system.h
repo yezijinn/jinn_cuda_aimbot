@@ -100,6 +100,7 @@ public:
     // 合法输入经 clamp 后值不变；非法值被钳到安全区间，避免状态机出现
     // 负 cooldown（elapsed>=负 恒真→瞬间回 Armed）或 fire_duration<1 的异常行为。
     static void sanitizeConfig(TriggerConfig& cfg) {
+        cfg.stop_fire_on_loss = true;
         cfg.fire_duration_ms        = std::clamp(cfg.fire_duration_ms, 1, 10000);
         cfg.fire_duration_random_ms = std::clamp(cfg.fire_duration_random_ms, 0, 10000);
         cfg.cooldown_ms             = std::clamp(cfg.cooldown_ms, 0, 10000);

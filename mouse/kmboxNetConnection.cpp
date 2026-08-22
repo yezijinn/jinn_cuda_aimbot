@@ -47,7 +47,7 @@ KmboxNetConnection::KmboxNetConnection(const std::string& ip, const std::string&
     zooming_active = false;
 
     // 监控链路是按键判定（keyboard_listener → keyPressed → kmNet_monitor_mouse_*）的
-    // 唯一数据源，且项目明确不回退 Win32：监控未就绪时鼠标热键会整体失效。
+    // 主要数据源；监控未就绪时上层会回退 Win32 GetAsyncKeyState，避免鼠标热键整体失效。
     // kmNet_monitor 现在会等到监听线程就绪（bind 成功）才返回 success，因此这里
     // 对失败做有界重试，把"盒子刚开机/网络抖动"导致的偶发监控失败降到最低。
     // 每次失败间隔递增（100ms/200ms），最多 3 次；总耗时上限约 300ms(ACK) + 500ms(就绪)。
@@ -238,17 +238,32 @@ void KmboxNetConnection::releaseAllButtons()
 {
     std::lock_guard<std::mutex> lock(command_mutex_);
 
-    // mouseAll(0, 0, 0, 0) clears the device's complete software button mask
-    // in one acknowledged packet; individual releases can leave stale state
-    // behind when a preceding UDP response was lost.
-    const int ret = kmNet_mouse_all(0, 0, 0, 0);
-    MarkDisconnectedLocked(ret);
+    // 这里只清理“软件按钮掩码”，不得用 monitor/GetAsyncKeyState 的物理按住位
+    // 作为 button 参数再发一次 kmNet_mouse_all()。SDK 的 kmNet_mouse_all(button,...)
+    // 是把 button 直接写进 softmouse.button，也就是盒子侧软件报告按钮，不是“保留
+    // 物理按住位”。上一版把物理按住掩码回灌给软件报告后，本地 softwarePressed_
+    // 状态又是 false，后续 leftUp/rightUp 不再补发释放，盒子侧软件左键会永久卡住，
+    // 表现为用户鼠标只能移动、不能按。
+    // 正确做法是先把软件按钮整体清成 0，再对每个按键补发一次独立 release，最后
+    // 清除历史 mask。用户手动物理键与软件注入是两条独立路径，清软件不会“抢走”
+    // 用户正在按住的真实鼠标按键。
+    MarkDisconnectedLocked(kmNet_mouse_all(0, 0, 0, 0));
     MarkDisconnectedLocked(kmNet_mouse_left(0));
     MarkDisconnectedLocked(kmNet_mouse_right(0));
     MarkDisconnectedLocked(kmNet_mouse_middle(0));
     MarkDisconnectedLocked(kmNet_mouse_side1(0));
     MarkDisconnectedLocked(kmNet_mouse_side2(0));
     MarkDisconnectedLocked(kmNet_unmask_all());
+}
+
+bool KmboxNetConnection::monitorReady() const
+{
+    if (!is_open_.load())
+        return false;
+    // 该查询只读 SDK 原子镜像，不产生网络往返；监听线程就绪后五个按键镜像会一起
+    // 发布，因此只要有左键状态即为监听已建立。个别按键在启动帧内尚未刷新时，
+    // kmboxOrWin32MouseHeld() 仍会回退到 Win32 状态，不会因此屏蔽用户操作。
+    return kmNet_monitor_mouse_left() >= 0;
 }
 
 bool KmboxNetConnection::middleDown()

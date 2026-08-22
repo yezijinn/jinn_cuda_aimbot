@@ -964,6 +964,14 @@ void MouseThread::pressMouse(const AimbotTarget& target)
             return;
         }
 
+        // 用户正在物理按住左键时，不覆盖为软件按下状态，避免随后 releaseMouse()
+        // 把用户的手动按住误判为软件卡住而持续维护软件键状态。
+        if (mouseInput->hasPhysicalButtonState() && mouseInput->shootingActive())
+        {
+            mouse_pressed = false;
+            return;
+        }
+
         if (mouseInput->leftDown())
             mouse_pressed = true;
         else if (!mouseInput->isOpen())
@@ -991,10 +999,11 @@ void MouseThread::releaseMouse()
             return;
         }
 
-        // 同上：trigger 判定"不该开火"而调用本函数时，若射击键正被物理按住，
-        // 不发 leftUp，避免软件抬起压制物理按下（手动射击被强制松开）。
-        if (shooting.load())
-            return;
+        // 必须真正下发软件左键抬起；只清 mouse_pressed 会让已按住的软件开火键
+        // 永久悬置，表现为程序认为已停止但鼠标左键仍持续生效。
+        // leftUp() 内部会判断用户是否物理按住并拒绝下发 release，因此这里不能
+        // 再看 shooting.load()：软件开火本身会让该标志为真，会导致永远不释放。
+        (void)mouseInput->leftUp();
 
         // 无论 leftUp 是否成功，只要已尝试释放就清本地状态。
         // 若 UDP 偶发丢 ACK 但盒子实际已抬起，继续保留 true 会让上层认为仍按住，

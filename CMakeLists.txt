@@ -402,6 +402,20 @@ if(BUILD_TESTING)
     target_link_libraries(kmboxNet_protocol_test PRIVATE ws2_32)
     add_test(NAME kmboxNet_protocol_test COMMAND kmboxNet_protocol_test)
 
+    add_executable(kmboxNet_live_smoke_test
+        "${SRC_DIR}/mouse/kmboxNetLiveSmokeTest.cpp"
+        "${SRC_DIR}/mouse/KmboxNetConnection.cpp"
+        "${SRC_DIR}/mouse/kmbox_net/kmboxNet.cpp"
+    )
+    target_include_directories(kmboxNet_live_smoke_test PRIVATE
+        "${SRC_DIR}"
+        "${SRC_DIR}/mouse"
+    )
+    if(MSVC)
+        target_compile_options(kmboxNet_live_smoke_test PRIVATE /utf-8 /W3 /sdl)
+    endif()
+    target_link_libraries(kmboxNet_live_smoke_test PRIVATE ws2_32)
+
     add_executable(camera_enumeration_cache_test
         "${SRC_DIR}/capture/camera_enumeration_cache_test.cpp"
     )
@@ -433,8 +447,6 @@ if(BUILD_TESTING)
     if(MSVC)
         target_compile_options(onnx_inspector_regression_test PRIVATE /utf-8)
     endif()
-    add_test(NAME onnx_inspector_regression_test
-        COMMAND onnx_inspector_regression_test "${SRC_DIR}/depth_models/depth_anything_v2_vits_224.onnx")
 endif()
 
 set_target_properties(ai PROPERTIES
