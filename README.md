@@ -1,109 +1,116 @@
-﻿<div align="center">
+# 咔蚯
 
-# 咔蚯 (C++)
+Windows-only、C++17、CUDA/TensorRT 后端的实时 YOLO 推理与控制程序。
 
-[![C++](https://img.shields.io/badge/C%2B%2B-17-blue)](https://github.com/SunOner/mybot)
-[![GitHub stars](https://img.shields.io/github/stars/SunOner/mybot?color=ffb500)](https://github.com/SunOner/mybot)
-[![CUDA 13.2](https://img.shields.io/badge/CUDA-13.2-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-downloads)
-[![Discord server](https://badgen.net/discord/online-members/37WVp6sNEh)](https://discord.gg/37WVp6sNEh)
-
-  <p>
-    <a href="https://github.com/SunOner/mybot/releases" target="_blank">
-      <img width="75%" src="https://github.com/SunOner/sunone_aimbot/blob/main/media/one.gif">
-    </a>
-  </p>
-</div>
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](https://en.cppreference.com/w/cpp/17)
+[![CUDA 13.2](https://img.shields.io/badge/CUDA-13.2-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-13-2-0-download-archive)
+[![TensorRT](https://img.shields.io/badge/TensorRT-10.x-76B900)](https://developer.nvidia.com/tensorrt)
+[![Windows](https://img.shields.io/badge/Windows-x64-blue)](https://www.microsoft.com/windows)
 
 ---
 
-## CUDA + TensorRT Build (NVIDIA Only)
+## 功能概览
 
-This project runs on **NVIDIA GPUs with CUDA/TensorRT**. The current codebase has one supported backend; DML is not available in this build.
+- 屏幕采集 → 图像预处理 → YOLO 推理 → 目标过滤 → 目标预测 → 鼠标控制 → UI 配置
+- Windows-only 原生工程，主源码位于 `main`
+- NVIDIA CUDA/TensorRT 推理后端
+- ImGui 覆盖层负责 UI、参数调整、运行状态显示
+- 输入设备支持原生鼠标、KMBOX、KMBOX-A、KMBOX-Net、MAKCU 等接入方式
+- 鼠标控制算法包含 Kalman、Minimum Jerk、PID、拟人化轨迹与目标发布
 
-**GPU requirements:** GTX 1660, RTX 2000/3000/4000/5000 series
-**Not supported:** Pascal (GTX 10xx) and older (TensorRT limitation)
-**Software:** Latest NVIDIA driver + [CUDA 13.2](https://developer.nvidia.com/cuda-13-2-0-download-archive)
+## 构建环境
 
-Before running, update your NVIDIA graphics driver to the latest version and install CUDA 13.2.
+当前工程使用以下本地依赖，项目本身不提交第三方 SDK 和大型依赖目录：
 
-Pre-compiled builds are available on the [Discord server](https://discord.gg/37WVp6sNEh) in the **pre-releases** channel. Just download, unpack, and run `ai.exe`.
+- TensorRT：本地 `main/CUDA.TensorRT`
+- ONNX Runtime：仓库父目录本地 `onnxruntime-win-x64-1.28.0`
+- OpenCV CUDA：本地 `main/modules/opencv/build/cuda/install`
+- 构建系统：VS2022 + CUDA 13.2 + Ninja + CMake
 
----
+> 构建脚本会注入本机非标准安装环境，属于工程环境专用模板。其他机器需要按实际路径调整。
 
-## How to Run
+## 快速开始
 
-1. Update your NVIDIA graphics driver to the latest version.
-2. Install [CUDA 13.2](https://developer.nvidia.com/cuda-13-2-0-download-archive) if not already present.
-3. Run `ai.exe` from the output directory. On first launch the model exports to a `.engine` file, which takes a few minutes.
-4. Place your `.onnx` model in the `models` folder and select it in the overlay.
-5. All settings are in the overlay panel (open with the **Home** key).
+### 1. 安装环境
 
-### Build From Source on Windows
+- Windows 10/11
+- NVIDIA 显卡：GTX 1660 或 RTX 2000/3000/4000/5000 系列
+- 最新 NVIDIA 驱动
+- CUDA 13.2
+- Visual Studio 2022 + Ninja
 
-Use the project's PowerShell build entry point from the repository root. The current script is machine-specific and must be adapted if the local VS/CUDA/ONNX Runtime paths change.
+新版 CUDA/TensorRT 对 Pascal 或更老架构支持受限，GTX 10xx 及更早显卡不在支持目标内。
+
+### 2. 编译
+
+在 `main` 根目录使用 PowerShell 执行：
 
 ```powershell
 & ".\build_current.ps1"
 ```
 
-The verified output is `build_cuda\Release\ai.exe`.
+已验证运行产物：
 
-### Controls
+```text
+build_cuda\Release\ai.exe
+```
 
-| Key | Action |
-|-----|--------|
-| Right Mouse Button | Aim at detected target |
-| F2 | Exit |
-| F3 | Pause aiming |
-| F4 | Reload config |
-| Home | Open/close overlay |
+### 3. 运行
 
----
+1. 将 `.onnx` 模型放入 `models` 目录。
+2. 运行 `ai.exe`，首次加载会生成或加载 `.engine` 文件。
+3. 在 ImGui overlay 中选择模型并调整参数。
+4. 通过默认热键开关 overlay 和瞄准控制。
 
-## Documentation
+## 常用控制
 
-Full documentation index: **[docs/README.md](docs/README.md)**
+| 按键 | 功能 |
+|------|------|
+| Right Mouse Button | 对目标执行瞄准控制 |
+| F2 | 退出 |
+| F3 | 暂停瞄准 |
+| F4 | 重载配置 |
+| Home | 打开/关闭 overlay |
 
-| Document | Purpose |
-|----------|---------|
-| [docs/README.md](docs/README.md) | Documentation index |
-| [docs/CODEX_HANDOFF.md](docs/CODEX_HANDOFF.md) | New maintainer / agent handoff |
-| [docs/IMPLEMENTATION_SPEC.md](docs/IMPLEMENTATION_SPEC.md) | Product behavior contract |
-| [docs/TESTING.md](docs/TESTING.md) | Validation and simulation tests |
-| [docs/PUSH_SCOPE.md](docs/PUSH_SCOPE.md) | GitHub push scope and exclusion rules |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
+## 目录结构
 
-Maintainer and agent reference: [AGENTS.md](AGENTS.md)
+| 目录 | 职责 |
+|------|------|
+| `capture/` | 屏幕和视频采集 |
+| `config/` | 配置加载、保存与参数模型 |
+| `detector/` | YOLO 推理、TensorRT/ONNX Runtime 后端、后处理 |
+| `keyboard/` | 键盘监听与键位映射 |
+| `mouse/` | 鼠标输入、KMBOX-net/KMBOX-A/MAKCU、平滑控制算法 |
+| `overlay/` | ImGui 绘制、UI 状态与配置展示 |
+| `runtime/` | 主循环、线程调度、触发系统 |
+| `tensorrt/` | TensorRT 封装与推理监控 |
+| `mem/` | CPU/GPU 资源管理 |
 
----
+## 文档
+
+| 文档 | 用途 |
+|------|------|
+| [docs/README.md](docs/README.md) | 文档入口 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构与模块关系 |
+| [docs/IMPLEMENTATION_SPEC.md](docs/IMPLEMENTATION_SPEC.md) | 行为契约 |
+| [docs/TESTING.md](docs/TESTING.md) | 验证与测试说明 |
+| [docs/PUSH_SCOPE.md](docs/PUSH_SCOPE.md) | GitHub 推送范围 |
+| [AGENTS.md](AGENTS.md) | 维护者和代理约束 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 |
+
+## 发布约定
+
+- 软件名：咔蚯
+- 版本号：与 Git tag 保持一致
+- Tag 强制格式：`vYYYYMMDD`，例如 `v20260822`
+- GitHub 仓库根目录：`main` 源码目录
+- GitHub 不提交：外部研究文档、参考项目、CUDA/TensorRT 依赖树、ONNX Runtime、构建产物、模型和运行日志
 
 ## References
 
-* [TensorRT Documentation](https://docs.nvidia.com/deeplearning/tensorrt/)
-* [OpenCV Documentation](https://docs.opencv.org/4.x/d1/dfb/intro.html)
-* [ImGui](https://github.com/ocornut/imgui)
-* [CppWinRT](https://github.com/microsoft/cppwinrt)
-* [GLFW](https://www.glfw.org/)
-* [WindMouse](https://ben.land/post/2021/04/25/windmouse-human-mouse-movement/)
-* [KMBOX](https://www.kmbox.top/)
-* [MAKCU](https://makcu.com)
-* [depth-anything-tensorrt](https://github.com/spacewalk01/depth-anything-tensorrt)
-
----
-
-## Licenses
-
-**OpenCV:** [Apache License 2.0](https://opencv.org/license.html)
-**ImGui:** [MIT License](https://github.com/ocornut/imgui/blob/master/LICENSE)
-
----
-
-## Support the Project
-
-This project is developed with support from [Boosty](https://boosty.to/sunone) and [Patreon](https://www.patreon.com/c/sunone) backers, who also get access to improved AI models.
-
-**Need help?** Join the [Discord server](https://discord.gg/37WVp6sNEh) or open a GitHub issue.
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=SunOner/mybot&type=date&legend=top-left)](https://www.star-history.com/#SunOner/mybot&type=date&legend=top-left)
+- [TensorRT Documentation](https://docs.nvidia.com/deeplearning/tensorrt/)
+- [OpenCV Documentation](https://docs.opencv.org/4.x/d1/dfb/intro.html)
+- [ImGui](https://github.com/ocornut/imgui)
+- [CppWinRT](https://github.com/microsoft/cppwinrt)
+- [KMBOX](https://www.kmbox.top/)
+- [MAKCU](https://makcu.com)
