@@ -7,14 +7,14 @@
     生成物：<BuildDir>/Release/ai.exe
 
     关键陷阱说明：
-      1. 本项目 build_cuda/CMakeCache.txt 写死指向旧副本 D:/aim/main，
+      1. 本项目 build_cuda/CMakeCache.txt 写死指向旧副本 <old-repo-root>，
          直接 cmake --build build_cuda 会编译「旧副本」而非当前项目。
       2. 官方 build_cuda.bat 依赖 vswhere，本环境 vswhere 找不到
          E:/DevTools/VisualStudio（非标准安装），会报“未找到 VS”。
       3. VsDevCmd.bat 在本环境有缺陷(ommon7)，不会写入 PATH，需手动补 bin。
-      4. 源目录直接使用 ASCII 路径 D:/jinn_aim/main（不依赖软链，避免路径拼接错误）。
+      4. 源目录直接从 $PSScriptRoot 推导，不依赖软链，避免路径拼接错误。
 
-    注：2026-08-21 起已弃用 D:/aim_cur 软链，全程使用真实 ASCII 路径。
+    注：2026-08-21 起已弃用 <old-symlink> 软链，全程使用真实脚本目录。
 #>
 $ErrorActionPreference = "Continue"
 
@@ -39,9 +39,9 @@ $add = @(
 $env:PATH = ($add -join ";") + ";" + $env:PATH
 
 $cmake = "E:/DevTools/VisualStudio/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe"
-$src   = "D:/jinn_aim/main"                       # 直接使用 ASCII 真实路径，不依赖软链
-$trt   = "D:/jinn_aim/main/CUDA.TensorRT"
-$build = "D:/jinn_aim/main/build_cuda"   # 使用官方 build_cuda 缓存，产物落 build_cuda/Release/ai.exe
+$src   = $PSScriptRoot               # 从脚本所在目录推导，避免硬编码本机路径
+$trt   = "$src/CUDA.TensorRT"
+$build = "$src/build_cuda"           # 使用官方 build_cuda 缓存，产物落 build_cuda/Release/ai.exe
 
 # ---- 4) 配置 + 构建 ----
 & $cmake --fresh -S $src -B $build -G "Ninja Multi-Config" `

@@ -1,4 +1,4 @@
-# Project Status — Sunone Aimbot 2
+# Project Status — 咔蚯
 
 **Status (current):** 2026-07-29  
 **Backend:** CUDA/TensorRT only  
@@ -112,7 +112,7 @@ The current `CMakeLists.txt` explicitly removes `onnxruntime.dll` and `onnxrunti
 
 ## Workspace Notes
 
-- Project root is `D:\aim\main`.
+- Project root is `<repo-root>`.
 - `.codegraph\` contains an active SQLite database; must be preserved intact together with WAL/SHM files.
 - Portable release package paths (`CUDA_Portable_Release`, `CUDA_Portable_Release.zip`) do not currently exist in the project root.
 

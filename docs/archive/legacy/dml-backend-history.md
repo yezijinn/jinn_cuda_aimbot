@@ -7,7 +7,7 @@
 
 # DML 后端历史记录（已失效）
 
-DML（DirectML）后端曾作为 Sunone Aimbot 2 的早期 Windows GPU 推理路径，基于 ONNX Runtime + DirectML，
+DML（DirectML）后端曾作为 咔蚯 的早期 Windows GPU 推理路径，基于 ONNX Runtime + DirectML，
 支持非 NVIDIA GPU，以 `.onnx` 模型格式运行。
 
 主要历史构建工件：

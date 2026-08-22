@@ -1,4 +1,4 @@
-﻿# AGENTS.md 维护指南
+# AGENTS.md 维护指南
 
 > 本文档面向后续 Agent 和维护者，记录项目关键约定、构建规则、架构决策和已知问题。  
 > 内容依据本仓库内的实际文档和源码提炼；所有路径、工具链版本和环境信息均描述**本地验证机器**，换机时须重新确认。  
@@ -20,7 +20,7 @@
 
 ## 1. 项目拓扑
 
-- **语言**：C++17，Windows-only，可执行目标 `ai`，入口 `mybot.cpp`（位于项目根 `D:\jinn_aim\main`）。
+- **语言**：C++17，Windows-only，可执行目标 `ai`，入口 `mybot.cpp`（位于项目根 `<repo-root>`）。
 - **后端**：当前 `CMakeLists.txt`（lines 24–26）在 `AIMBOT_USE_CUDA=OFF` 时直接以 `FATAL_ERROR` 中止，lines 28–31 明确注释"CUDA/TensorRT is the only supported backend"，并无条件定义宏 `USE_CUDA`（line 422）。当前产品仅支持 CUDA/TensorRT；DML 相关文档、脚本、构建树和发行包均为历史参考，不得恢复、配置、构建或打包 DML 路径。
 - **配置权威**：`config/config.h`（字段声明和常量）和 `config/config.cpp`（`Config::Config()` 构造函数中的默认值）是 schema 和默认值的唯一来源；`config.ini` 是运行时生成状态，不是默认值定义。
 - **串口库**：`serial` 以 `serial_embedded` 静态库形式嵌入；编辑 `mybot.cpp` 时保留附近的中文日志字符串。
@@ -30,7 +30,7 @@
 
 | 目录/文件 | 用途 |
 |---|---|
-| `scr/`、`detector/`、`mouse/` 等 | 全部应用源码（项目根 `D:\jinn_aim\main` 即源码根） |
+| `scr/`、`detector/`、`mouse/` 等 | 全部应用源码（项目根 `<repo-root>` 即源码根） |
 | `CMakeLists.txt` | 后端选择和源文件清单 |
 | `build_current.ps1` | 当前唯一构建入口：注入 VS/CUDA/Ninja 环境并 `--fresh` 重配后编译 |
 | `CUDA.TensorRT/` | CUDA/TensorRT SDK 和运行时资源（本地） |
@@ -83,13 +83,13 @@
 
 ### 唯一构建入口（PowerShell）
 
-在仓库根目录 `D:\jinn_aim\main` 直接运行：
+在仓库根目录 `<repo-root>` 直接运行：
 
 ```powershell
-& "D:\jinn_aim\main\build_current.ps1"
+& "<repo-root>\build_current.ps1"
 ```
 
-脚本必须在本机 PowerShell 直接执行，不能用 Bash 嵌套调用。脚本会注入非标准安装的 VS2022、CUDA 13.2 和 Ninja 环境，使用 `--fresh` 重配 `build_cuda` 后构建，产物固定为 `D:\jinn_aim\main\build_cuda\Release\ai.exe`。
+脚本必须在本机 PowerShell 直接执行，不能用 Bash 嵌套调用。脚本会注入非标准安装的 VS2022、CUDA 13.2 和 Ninja 环境，使用 `--fresh` 重配 `build_cuda` 后构建，产物固定为 `<repo-root>\build_cuda\Release\ai.exe`。
 
 **不要绕过该脚本手动调用 cmake**；本机 `vswhere` 枚举不到 VS，直接调用会因缺少 Windows SDK 头文件（如 `winsock2.h`）而失败。
 
@@ -118,13 +118,13 @@ Does not match the generator used previously: Visual Studio 18 2026
 
 以下信息描述**本地验证机器**，不代表通用环境：
 
-- 非标准安装的 Visual Studio（本机路径为 `E:/DevTools/VisualStudio`），`vswhere` 无法枚举，必须由 `build_current.ps1` 注入 VsDevCmd + PATH
+- 非标准安装的 Visual Studio（本机路径以 `<VS-install-root>` 代替；实际值见本机 `build_current.ps1`），`vswhere` 无法枚举，必须由 `build_current.ps1` 注入 VsDevCmd + PATH
 - CUDA 版本：13.2；TensorRT 位于项目本地 `CUDA.TensorRT/`
-- ONNX Runtime 1.28.0 位于 `D:\jinn_aim\onnxruntime-win-x64-1.28.0`，由 CMake 引用，不需要手工改动
+- ONNX Runtime 1.28.0 位于 `../onnxruntime-win-x64-1.28.0`，由 CMake 引用，不需要手工改动
 - 换机或 VS 安装位置变化后，使用以下命令找到本机的 `VsDevCmd.bat` 和 `cmake.exe`：
 
 ```powershell
-Get-ChildItem -Path "C:\","D:\","E:\" -Recurse -Filter "VsDevCmd.bat" -ErrorAction SilentlyContinue | Select-Object FullName
+Get-ChildItem -Path (Get-PSDrive -PSProvider FileSystem).Root -Recurse -Filter "VsDevCmd.bat" -ErrorAction SilentlyContinue | Select-Object FullName
 ```
 
 ---

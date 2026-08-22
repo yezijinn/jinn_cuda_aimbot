@@ -30,7 +30,7 @@ This file is the central index for practical setup and diagnosis. Keep detailed 
 
 ## Development
 
-> 编译方法（现行）：本工程唯一编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物锁定 `build_cuda/Release/ai.exe`。旧版 `BUILDER.ps1`/`build.md`/`guides/build-*.md` 等文档因引用已废弃脚本与旧路径（`D:\aim\main`、`build_cuda_current`），已于 2026-08-21 清理。如需详细环境注入步骤，参见仓库 `AGENTS.md` §4 与 `PROJECT_FILE_DISPOSITION.md`。
+> 编译方法（现行）：本工程唯一编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物锁定 `build_cuda/Release/ai.exe`。旧版 `BUILDER.ps1`/`build.md`/`guides/build-*.md` 等文档因引用已废弃脚本与旧路径（`<repo-root>`、`build_cuda_current`），已于 2026-08-21 清理。如需详细环境注入步骤，参见仓库 `AGENTS.md` §4 与 `PROJECT_FILE_DISPOSITION.md`。
 
 Core references:
 

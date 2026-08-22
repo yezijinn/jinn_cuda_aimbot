@@ -1,4 +1,4 @@
-﻿#define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <windows.h>
 #include <iostream>
@@ -1052,7 +1052,7 @@ bool Config::saveConfig(const std::string& filename)
     }
 
     file << "# An explanation of the options can be found at:\n";
-    file << "# https://github.com/SunOner/mybot/blob/main/docs/config.md\n\n";
+    file << "# ./docs/config.md\n\n";
 
     // Capture
     file << "# Capture\n"

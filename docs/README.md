@@ -1,8 +1,8 @@
-# 咔蚯（原 Sunone Aimbot 2）— 文档索引
+# 咔蚯（原 咔蚯）— 文档索引
 
 本文件是所有项目文档的规范入口。
 
-> **现行编译规范（2026-08-21 更新）**：本仓库已重命名为 `mybot`，唯一编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物锁定 `build_cuda/Release/ai.exe`。旧版 `BUILDER.ps1`/`build.md`/`BUILD_AND_RELEASE.md`/`BUILD_RELEASE_GUIDE.md`/`guides/build-*.md` 等文档因引用已废弃脚本与旧路径（`D:\aim\main`、`build_cuda_current`），已于本轮清理删除。详细环境注入步骤见 `AGENTS.md` §4 与 `PROJECT_FILE_DISPOSITION.md`。
+> **现行编译规范（2026-08-21 更新）**：本仓库已重命名为 `mybot`，唯一编译入口为根目录 `build_current.ps1`（PowerShell 直接运行），产物锁定 `build_cuda/Release/ai.exe`。旧版 `BUILDER.ps1`/`build.md`/`BUILD_AND_RELEASE.md`/`BUILD_RELEASE_GUIDE.md`/`guides/build-*.md` 等文档因引用已废弃脚本与旧路径（`<repo-root>`、`build_cuda_current`），已于本轮清理删除。详细环境注入步骤见 `AGENTS.md` §4 与 `PROJECT_FILE_DISPOSITION.md`。
 
 ---
 

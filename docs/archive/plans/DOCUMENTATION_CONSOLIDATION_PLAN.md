@@ -1,11 +1,11 @@
-﻿# Sunone Aimbot 2 文档整合计划
+# 咔蚯 文档整合计划
 
 > **【历史规划文档，已执行完成】**  
 > 本文档为 2026-07-26 生成的文档整合执行计划，已于 2026-07-26 完成执行，归档至 `docs/archive/plans/`。  
 > 当前文档结构以 [docs/README.md](../../README.md) 为准。
 
 > 生成时间：2026-07-26  
-> 项目根目录：`D:\TRAE_Project\Jinn_aimbot\mybot-main`  
+> 项目根目录：`<historical-local-root>\mybot-main`
 > 状态：**已执行完成**
 
 ---
@@ -53,7 +53,7 @@
 | `别人的成品项目界面UI/Sunset_AI调参指南.md` | 外部项目参考 | 外部参考资料，非本项目文档 | **移动至** `docs/references/sunset-ai-tuning.md` |
 | `别人的成品项目界面UI/Sunset_AI_UI参考分析.md` | 外部 UI 参考分析 | 外部参考资料 | **移动至** `docs/references/sunset-ai-ui-analysis.md` |
 | `UI参考文档_中英文对照.md`（根目录） | 外部项目 UI 对照表 | 外部参考资料 | **移动至** `docs/references/ui-translation-reference.md` |
-| `GenshinImpact.sp.exe成品项目界面UI/UI参考文档_中英文对照.md` | 另一外部项目 UI 参考 | 外部参考资料 | **移动至** `docs/references/genshin-ui-reference.md` |
+| `<external-ui-reference>/UI参考文档_中英文对照.md` | 另一外部项目 UI 参考 | 外部参考资料 | **移动至** `docs/references/genshin-ui-reference.md` |
 
 ---
 
@@ -93,7 +93,7 @@
 
 以下外部 URL 在项目文档中被引用（已验证，无需修改）：
 
-- README.md：GitHub、Discord、CUDA 下载、文档站点
+- README.md：GitHub、CUDA 下载、文档站点
 - docs/build.md：无外部链接
 - docs/config.md：无外部链接
 - docs/guides/：各指南之间相互引用正确
@@ -139,7 +139,7 @@ mybot-main/
     ├── 一键编译的命令是.txt        # 删除
     ├── Google Style Guides.txt     # 删除（整合至 CONTRIBUTING.md）
     ├── 别人的成品项目界面UI/       # 原目录可删除（内容已移入 docs/references/）
-    └── GenshinImpact.sp.exe成品项目界面UI/  # 原目录可删除（内容已移入 docs/references/）
+    └── <external-ui-reference>/  # 原目录可删除（内容已移入 docs/references/）
 ```
 
 ---
@@ -202,7 +202,7 @@ Move-Item -LiteralPath "穿越火线调参指南.md" -Destination "docs\game-gui
 Move-Item -LiteralPath "别人的成品项目界面UI\Sunset_AI调参指南.md" -Destination "docs\references\sunset-ai-tuning.md"
 Move-Item -LiteralPath "别人的成品项目界面UI\Sunset_AI_UI参考分析.md" -Destination "docs\references\sunset-ai-ui-analysis.md"
 Move-Item -LiteralPath "UI参考文档_中英文对照.md" -Destination "docs\references\ui-translation-reference.md"
-Move-Item -LiteralPath "GenshinImpact.sp.exe成品项目界面UI\UI参考文档_中英文对照.md" -Destination "docs\references\genshin-ui-reference.md"
+Move-Item -LiteralPath "<external-ui-reference>\UI参考文档_中英文对照.md" -Destination "docs\references\genshin-ui-reference.md"
 
 # 移动历史设计文档
 Move-Item -LiteralPath ".claude\artifacts\plans\multi-hotkey-local-config.md" -Destination "docs\archive\design\multi-hotkey-local-config-plan.md"
@@ -229,7 +229,7 @@ Move-Item -LiteralPath "纯默认配置.txt" -Destination "docs\archive\legacy-d
 ```markdown
 # 贡献指南
 
-感谢你对 Sunone Aimbot 2 项目的关注！
+感谢你对 咔蚯 项目的关注！
 
 ## 代码风格
 
@@ -260,7 +260,7 @@ Remove-Item -LiteralPath "Google Style Guides.txt"
 
 # 可选：删除空目录（确认内容已移出后）
 Remove-Item -LiteralPath "别人的成品项目界面UI" -Recurse -Force
-Remove-Item -LiteralPath "GenshinImpact.sp.exe成品项目界面UI" -Recurse -Force
+Remove-Item -LiteralPath "<external-ui-reference>" -Recurse -Force
 Remove-Item -LiteralPath ".claude\artifacts" -Recurse -Force
 ```
 

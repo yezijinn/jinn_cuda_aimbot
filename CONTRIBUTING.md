@@ -1,4 +1,4 @@
-﻿# Contributing to Sunone Aimbot 2
+# Contributing to 咔蚯
 
 ---
 
@@ -56,6 +56,6 @@ Do not move or rename files under `modules/`, `packages/`, `build*/`, or `CUDA.T
 4. Update relevant documentation in the same branch.
 5. Open a Pull Request with a concise title (≤70 chars) and a description covering: what changed, why, and what was tested.
 
-For questions, join the [Discord server](https://discord.gg/37WVp6sNEh) or open a GitHub issue.
+For questions, open a GitHub issue.
 
 Maintainer and agent reference: [AGENTS.md](AGENTS.md)

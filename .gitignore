@@ -7,6 +7,11 @@ build_current_last.log
 cmake-build-*/
 CMakeUserPresets.json
 
+# Local OCR helper scripts and generated results (not part of the public product)
+/ocr_images.py
+/ocr_genshin.py
+/ocr_results.json
+
 # CMake / Ninja
 [Cc]MakeCache.txt
 [Cc]MakeFiles/

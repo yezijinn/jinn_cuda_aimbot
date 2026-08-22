@@ -17,7 +17,7 @@ capture_fps = 60
 2. Open the UDP port in Windows Firewall. Run PowerShell as Administrator:
 
 ```powershell
-New-NetFirewallRule -DisplayName "Sunone UDP Capture 1234" -Direction Inbound -Protocol UDP -LocalPort 1234 -Action Allow
+New-NetFirewallRule -DisplayName "Kaiqiu UDP Capture 1234" -Direction Inbound -Protocol UDP -LocalPort 1234 -Action Allow
 ```
 
 3. Find the receiver PC local IP address:

@@ -1,4 +1,4 @@
-# Testing and Verification — Sunone Aimbot 2
+# Testing and Verification — 咔蚯
 
 **Status (current):** 2026-07-29
 
@@ -23,7 +23,7 @@ This project does not have a full unit test suite, CI pipeline, or automated har
 
 ## Build Verification Checklist
 
-Run these commands from `D:\aim\main` before claiming a build is valid:
+Run these commands from `<repo-root>` before claiming a build is valid:
 
 ```powershell
 # 1. Check executable exists and is nonzero
@@ -92,7 +92,7 @@ These must pass after implementing the corresponding feature:
 
 ## Known Limitations
 
-**Source root is `D:\aim\main`.** All build commands and path references use `D:\aim\main` as the project root.
+**Source root is `<repo-root>`.** All build commands and path references use `<repo-root>` as the project root.
 
 **No full unit test framework.** There is no test runner, no test directory, and no `CMakeLists.txt` test target. The `SOURCE_LOGIC_SIMULATION_TEST_PLAN.md` describes scenarios but requires manual setup of the fake input harness.
 

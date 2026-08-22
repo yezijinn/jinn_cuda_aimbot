@@ -1,4 +1,4 @@
-# Codex Handoff — mybot（原 Sunone Aimbot 2）
+# Codex Handoff — mybot（原 咔蚯）
 
 > **现行状态注记（2026-08-21）**：本仓库已重命名为 `mybot`，源根当前为 `mybot-main`。编译入口为根目录 `build_current.ps1`，产物 `build_cuda/Release/ai.exe`（旧 `BUILDER.ps1`/`BUILD_AND_RELEASE.md` 等已废弃清理，详见 [README.md](README.md#现行编译规范2026-08-21-更新)）。
 

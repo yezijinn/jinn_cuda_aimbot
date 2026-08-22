@@ -1,4 +1,4 @@
-﻿# Architecture — Sunone Aimbot 2
+# Architecture — 咔蚯
 
 **Status (current):** 2026-07-28  
 **Authority:** [IMPLEMENTATION_SPEC.md](IMPLEMENTATION_SPEC.md) overrides this document on all product-behavior questions.
@@ -21,7 +21,7 @@
 
 | Path | Purpose |
 |------|---------|
-| `scr/`, `detector/`, `mouse/`, etc. | Application source (project root `D:\aim\main` is the source root) |
+| `scr/`, `detector/`, `mouse/`, etc. | Application source (project root `<repo-root>` is the source root) |
 | `CMakeLists.txt` | Backend selection, source list, post-build DLL copy/removal |
 | `CUDA.TensorRT/` | Local CUDA/TensorRT SDK and runtime DLLs |
 | `modules/` | OpenCV and third-party modules |

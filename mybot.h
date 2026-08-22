@@ -1,5 +1,5 @@
-#ifndef SUNONE_AIMBOT_2_H
-#define SUNONE_AIMBOT_2_H
+#ifndef KAIQIU_AIM_H
+#define KAIQIU_AIM_H
 
 #include "config.h"
 #include "trt_detector.h"
@@ -28,4 +28,4 @@ extern std::atomic<int> active_mouse_hotkey_slot;
 extern std::mutex configMutex;
 extern std::mutex inputDevicesMutex;
 
-#endif // SUNONE_AIMBOT_2_H
+#endif // KAIQIU_AIM_H

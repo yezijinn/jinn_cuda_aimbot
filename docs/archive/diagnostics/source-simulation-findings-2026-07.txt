@@ -5,7 +5,7 @@
 
 ---
 
-已根据 [SOURCE_LOGIC_SIMULATION_TEST_PLAN.md](/D:/TRAE_Project/Jinn_aimbot/mybot-main/docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md) 完成源码级模拟检查。本轮没有修改代码。
+已根据 [SOURCE_LOGIC_SIMULATION_TEST_PLAN.md](<repo-root>/docs/SOURCE_LOGIC_SIMULATION_TEST_PLAN.md) 完成源码级模拟检查。本轮没有修改代码。
 
 ## 已确认的问题
 

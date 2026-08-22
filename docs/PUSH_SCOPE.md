@@ -1,8 +1,8 @@
 # GitHub 推送范围
 
-本文档定义本项目推送 GitHub 时的内容边界。仓库根目录建议为 `D:\jinn_aim\main`，不要把 `D:\jinn_aim` 整个目录作为 Git 根目录。
+本文档定义本项目推送 GitHub 时的内容边界。仓库根目录建议为 `<repo-root>`，不要把 `<project-root>` 整个目录作为 Git 根目录。
 
-> 当前 `D:\jinn_aim\main` 下未发现 `.git`。推送前需要先初始化仓库并配置远端，例如 `git init` + `git remote add origin ...`。
+> 当前 `<repo-root>` 下未发现 `.git`。推送前需要先初始化仓库并配置远端，例如 `git init` + `git remote add origin ...`。
 
 ## 发布命名约定
 
@@ -14,12 +14,12 @@
 
 ## 外部目录不推送
 
-以下 `D:\jinn_aim` 外部目录不进入 `main` 仓库，不作为 GitHub 推送内容：
+以下 `<project-root>` 外部目录不进入 `main` 仓库，不作为 GitHub 推送内容：
 
-- `D:\jinn_aim\docs`：研究文档、项目修改记录、协作文档不推送
-- `D:\jinn_aim\reference`：参考项目、官方 SDK 样例不推送
-- `D:\jinn_aim\logs`、`D:\jinn_aim\temp`、`D:\jinn_aim\Codex定时任务内容.txt`：本地日志与临时任务文件不推送
-- `D:\jinn_aim\onnxruntime-win-x64-1.28.0`：本地 ONNX Runtime 运行库不推送
+- `<project-root>\docs`：研究文档、项目修改记录、协作文档不推送
+- `<project-root>\reference`：参考项目、官方 SDK 样例不推送
+- `<project-root>\logs`、`<project-root>\temp`、`<project-root>\Codex定时任务内容.txt`：本地日志与临时任务文件不推送
+- `../onnxruntime-win-x64-1.28.0`：本地 ONNX Runtime 运行库不推送
 
 ## 允许推送的核心内容
 
@@ -50,5 +50,5 @@
 1. Git 根目录必须是 `main` 内部路径，避免把父目录的 ONNX Runtime、依赖 SDK、日志和定时任务文件一起纳入。
 2. 只提交源码、文档和明确需要的构建脚本；不要把本地编译树、三方 SDK、模型文件、运行缓存提交上去。
 3. 提交前检查暂存区：`git add <显式路径>`，不要用 `git add .` 全量添加。
-4. 如果公开仓库，`build_current.ps1` 中的 `E:/DevTools/VisualStudio`、`D:/jinn_aim` 等本机路径应视为本地专用；保留脚本时可注明“环境专用模板”，不宜写成通用安装标准。
-5. 日志和修改记录 `D:\jinn_aim\docs\aim_项目修改日志.md` 默认不进入 GitHub；如需同步，应转换为抽象化发布说明后再提交。
+4. 如果公开仓库，`build_current.ps1` 中的本机工具链路径、`<project-root>` 等应视为本地专用；保留脚本时可注明“环境专用模板”，不宜写成通用安装标准。
+5. 日志和修改记录 `<project-root>\docs\aim_项目修改日志.md` 默认不进入 GitHub；如需同步，应转换为抽象化发布说明后再提交。
