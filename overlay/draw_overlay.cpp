@@ -1,40 +1,225 @@
-﻿#define WIN32_LEAN_AND_MEAN // 减少 Windows 头包含的额外项，提高编译速度
-#define _WINSOCKAPI_ // 防止包含 winsock.h 与 winsock2 冲突
-#include <winsock2.h> // 包含 Winsock2 的网络头（仅为保持一致，UI 文件很少直接使用）
-#include <Windows.h> // 包含基本 Windows API（窗口控制、消息循环等）
-#include "imgui/imgui.h" // ImGui 主头，提供所有 UI 绘制函数
-#include "mybot.h" // 项目主头，包含全局配置对象 config 等
-#include "overlay.h" // overlay 模块声明头，用于访问覆盖层功能
-#include "overlay/config_dirty.h" // 标记配置已修改的接口，便于后续保存
-#include "overlay/ui_sections.h" // UI 布局尺寸等常量（例如按钮宽度）
+#define WIN32_LEAN_AND_MEAN
+#define _WINSOCKAPI_
+#include <winsock2.h>
+#include <Windows.h>
 
-// 函数: draw_overlay
-// 作用: 绘制覆盖层界面设置面板，包括隐藏选项和保存按钮。
-// 说明: 此函数被 UI 主循环调用来显示与覆盖层外观相关的控件。
-void draw_overlay()
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+#include "imgui/imgui.h"
+#include "mybot.h"
+#include "overlay.h"
+#include "overlay/config_dirty.h"
+#include "overlay/ui_sections.h"
+
+namespace
 {
-    ImGui::PushID("overlay_section_visual"); // 使用唯一 ID 分组本节控件，避免重复
-    ImGui::SeparatorText("界面设置"); // 绘制分割线与小节标题
-    if (ImGui::Checkbox("从捕获中隐藏面板", &config.overlay_exclude_from_capture)) // 用户勾选框，改变配置值
-    { // 当用户改变复选框状态时执行以下代码
-        Overlay_ApplyCaptureExclusion(); // 应用新的隐藏/显示设置到窗口
-        OverlayConfig_MarkDirty(); // 标记配置已更改，程序稍后会保存到磁盘
-    }
-    ShowSettingTooltip("从捕获中隐藏面板"); // 在复选框旁显示帮助提示（悬停时出现）
-    ImGui::PopID(); // 恢复 ID 栈
+    std::filesystem::path ConfigDirectory()
+    {
+        wchar_t exePath[MAX_PATH]{};
+        const DWORD length = GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        if (length > 0 && length < MAX_PATH)
+            return std::filesystem::path(exePath).parent_path();
 
-    ImGui::Spacing(); // 插入垂直间距，美化 UI 布局
-    if (ImGui::Button("保存配置到文件", ImVec2(UiLayout::kActionButtonWidth, 0.0f))) // 绘制保存按钮
-    { // 用户点击保存按钮时执行
-        // 修复：原实现直接调用无参 config.saveConfig()，存在三个问题：
-        //   1) 与延迟落盘机制使用的 saveConfig("config.ini") 目标文件名可能不一致（保存位置分裂）；
-        //   2) 完全绕过 OverlayConfig_MarkDirty/TrySave 的去抖机制；
-        //   3) 保存后不清 cfgDirty，0.35s 后 TrySave 会再写一次盘（用户点一次实际写两次）。
-        // 改为统一走 MarkDirty + SaveNow：保持「点击必定立即写盘」的原语义
-        //（SaveNow 在 !cfgDirty 时会提前返回，故需先置脏），同时清除脏标记消除双写。
-        OverlayConfig_MarkDirty();
-        OverlayConfig_SaveNow();
+        std::error_code ec;
+        const auto dir = std::filesystem::current_path(ec);
+        return ec ? std::filesystem::path(".") : dir;
     }
-    ShowSettingTooltip("保存配置到文件"); // 为保存按钮显示帮助提示
+
+    std::string ToUtf8(const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        const std::wstring wide = path.wstring();
+        if (wide.empty())
+            return {};
+
+        const int length = WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()),
+                                               nullptr, 0, nullptr, nullptr);
+        if (length <= 0)
+            return {};
+
+        std::string out(static_cast<std::size_t>(length), '\0');
+        WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()),
+                            out.data(), length, nullptr, nullptr);
+        return out;
+#else
+        return path.u8string();
+#endif
+    }
+
+    struct ConfigFileEntry
+    {
+        std::string display;
+        std::filesystem::path path;
+    };
+
+    double& ConfigFileCacheTimestamp()
+    {
+        static double lastRefreshAt = -1.0;
+        return lastRefreshAt;
+    }
+
+    void InvalidateConfigFileCache()
+    {
+        ConfigFileCacheTimestamp() = -1.0;
+    }
+
+    const std::vector<ConfigFileEntry>& RefreshConfigFileList()
+    {
+        static std::vector<ConfigFileEntry> files;
+        const double now = ImGui::GetTime();
+        if (ConfigFileCacheTimestamp() >= 0.0 && (now - ConfigFileCacheTimestamp()) < 2.0)
+            return files;
+        ConfigFileCacheTimestamp() = now;
+        files.clear();
+
+        std::error_code ec;
+        const auto dir = ConfigDirectory();
+        std::filesystem::directory_iterator it(dir, ec), end;
+        for (; it != end; it.increment(ec))
+        {
+            if (ec)
+                break;
+
+            const auto& entry = it->path();
+            const std::string filename = entry.filename().string();
+            if (filename == "config.ini")
+            {
+                files.push_back({ToUtf8(entry.filename()), entry});
+                continue;
+            }
+
+            if (filename.rfind("config_", 0) != 0 || filename.size() <= 7)
+                continue;
+
+            const std::size_t iniPos = filename.rfind(".ini");
+            if (iniPos == std::string::npos || iniPos + 4 != filename.size())
+                continue;
+
+            files.push_back({ToUtf8(entry.filename()), entry});
+        }
+
+        std::sort(files.begin(), files.end(), [](const ConfigFileEntry& lhs, const ConfigFileEntry& rhs)
+        {
+            return lhs.display < rhs.display;
+        });
+        return files;
+    }
+
+    int CurrentConfigIndex(const std::vector<ConfigFileEntry>& files)
+    {
+        const std::filesystem::path current = config.configPath().lexically_normal();
+        for (std::size_t i = 0; i < files.size(); ++i)
+        {
+            if (files[i].path.lexically_normal() == current)
+                return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    std::string SanitizeProfileName(const char* command)
+    {
+        if (!command)
+            return {};
+
+        std::string out;
+        out.reserve(std::strlen(command));
+        for (const unsigned char c : std::string(command))
+        {
+            if (c == ' ' || c == '\t')
+            {
+                if (!out.empty())
+                    out.push_back('_');
+                continue;
+            }
+
+            if (c < 0x20 || c == 0x7f)
+                continue;
+
+            const char cc = static_cast<char>(c);
+            if (std::strchr("<>:\"/\\|?*", cc) != nullptr)
+                continue;
+
+            out.push_back(cc);
+        }
+
+        while (!out.empty() && (out.back() == '.' || out.back() == ' ' || out.back() == '_'))
+            out.pop_back();
+
+        if (out == "." || out == "..")
+            return {};
+        return out;
+    }
+
+    void SaveProfile(const char* command)
+    {
+        OverlayConfig_MarkDirty();
+        const std::string profile = SanitizeProfileName(command);
+        const std::string target = profile.empty()
+            ? "config.ini"
+            : "config_" + profile + ".ini";
+        const auto file = ConfigDirectory() / target;
+        OverlayConfig_SaveNow(file.string().c_str());
+        InvalidateConfigFileCache();
+    }
 }
 
+void draw_overlay()
+{
+    ImGui::PushID("overlay_section_config");
+    ImGui::SeparatorText("保存配置");
+
+    const auto& files = RefreshConfigFileList();
+    int current = CurrentConfigIndex(files);
+    std::vector<const char*> items;
+    items.reserve(files.size());
+    for (const auto& file : files)
+        items.push_back(file.display.c_str());
+
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
+    if (ImGui::Combo("加载配置文件", &current, items.data(), static_cast<int>(items.size()), -1))
+    {
+        if (current >= 0 && current < static_cast<int>(files.size()))
+        {
+            if (config.loadConfig(files[current].path.string()))
+                Overlay_ApplyCaptureExclusion();
+            OverlayConfig_ClearDirty();
+        }
+    }
+    ShowSettingTooltip("加载配置文件");
+
+    static char commandProfile[128] = {};
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
+    ImGui::InputText("命令配置文件", commandProfile, sizeof(commandProfile));
+    const std::string sanitizedProfile = SanitizeProfileName(commandProfile);
+    const std::size_t sanitizedSize = std::min(sanitizedProfile.size(), sizeof(commandProfile) - 1);
+    if (sanitizedProfile != commandProfile)
+    {
+        std::memcpy(commandProfile, sanitizedProfile.data(), sanitizedSize);
+        commandProfile[sanitizedSize] = '\0';
+    }
+    ShowSettingTooltip("命令配置文件");
+    const auto target = sanitizedProfile.empty() ? (ConfigDirectory() / "config.ini") :
+                                                   (ConfigDirectory() / ("config_" + sanitizedProfile + ".ini"));
+    const std::string preview = "将保存为 " + ToUtf8(target.filename());
+    ImGui::TextUnformatted(preview.c_str());
+
+    if (ImGui::Button("保存配置文件", ImVec2(UiLayout::kActionButtonWidth, 0.0f)))
+        SaveProfile(commandProfile);
+    ShowSettingTooltip("保存配置文件");
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("界面设置");
+    if (ImGui::Checkbox("从捕获中隐藏面板", &config.overlay_exclude_from_capture))
+    {
+        Overlay_ApplyCaptureExclusion();
+        OverlayConfig_MarkDirty();
+    }
+    ShowSettingTooltip("从捕获中隐藏面板");
+    ImGui::Spacing();
+    ImGui::PopID();
+}

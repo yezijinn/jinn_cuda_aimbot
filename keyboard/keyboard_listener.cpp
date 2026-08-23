@@ -357,10 +357,6 @@ void keyboardListener()
                     {
                         globalMouseThread->updateConfig(
                             config.detection_resolution,
-                            config.fovX,
-                            config.fovY,
-                            config.minSpeedMultiplier,
-                            config.maxSpeedMultiplier,
                             config.predictionInterval,
                             config.auto_shoot,
                             config.bScope_multiplier

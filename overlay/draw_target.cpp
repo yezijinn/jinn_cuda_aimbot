@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <atomic>
 #include <mutex>
 #include <vector>
 
@@ -38,7 +39,22 @@ void draw_tracker()
         ImGui::GetStyle().ItemInnerSpacing.x * 2.0f + ImGui::CalcTextSize("启用追踪器").x +
         ImGui::CalcTextSize("显示目标表格").x + ImGui::GetStyle().ItemSpacing.x;
     const bool fitTrackerCheckboxes = ImGui::GetContentRegionAvail().x >= trackerCheckboxWidth;
-    changed |= ImGui::Checkbox("启用追踪器", &config.tracker_enabled);
+    const int activeTrackerSlot = active_mouse_hotkey_slot.load(std::memory_order_relaxed);
+    Config::MouseHotkey* activeTrackerProfile =
+        activeTrackerSlot >= 0 && activeTrackerSlot < static_cast<int>(Config::MAX_MOUSE_HOTKEYS)
+            ? &config.mouse_hotkeys[static_cast<std::size_t>(activeTrackerSlot)]
+            : nullptr;
+    bool trackerEnabled = config.tracker_enabled;
+    if (activeTrackerProfile)
+        trackerEnabled = activeTrackerProfile->localBool("tracker_enabled", trackerEnabled);
+    if (ImGui::Checkbox("启用追踪器", &trackerEnabled))
+    {
+        if (activeTrackerProfile)
+            activeTrackerProfile->setLocalBool("tracker_enabled", trackerEnabled);
+        else
+            config.tracker_enabled = trackerEnabled;
+        changed = true;
+    }
     ShowSettingTooltip("启用追踪器");
     if (fitTrackerCheckboxes)
         ImGui::SameLine();
@@ -46,7 +62,7 @@ void draw_tracker()
     ShowSettingTooltip("显示目标表格");
     ImGui::EndGroup();
         ImGui::Text("模式: 简单锁定");
-        ImGui::Text("运行时: %s", config.tracker_enabled ? "追踪器" : "最近目标");
+        ImGui::Text("运行时: %s", trackerEnabled ? "追踪器" : "最近目标");
         ImGui::Text("锁定目标ID: %d", lockedTrackId);
         ImGui::Text("活跃目标数: %d", static_cast<int>(tracks.size()));
     ImGui::PopID();

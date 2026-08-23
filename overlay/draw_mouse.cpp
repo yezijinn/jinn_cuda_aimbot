@@ -28,10 +28,6 @@ namespace // 匿名命名空间：仅本文件可见的辅助代码
 // loadConfig() 之后才存在。旧写法导致首次绘制面板时全部历史值失配 → 无条件触发
 // updateConfig() + MarkDirty()，用户什么都没改就重写一次 config.ini。
 // 修复方式与 draw_ai.cpp 的 ai_state_initialized 保持一致：改为首帧惰性同步。
-int prev_fovX = 0; // 上次的 FOV X 范围
-int prev_fovY = 0; // 上次的 FOV Y 范围
-float prev_minSpeedMultiplier = 0.0f; // 上次最小速度倍率
-float prev_maxSpeedMultiplier = 0.0f; // 上次最大速度倍率
 float prev_predictionInterval = 0.0f; // 上次预测间隔
 bool  prev_kalman_enabled = false; // 上次 Kalman 启用状态
 float prev_kalman_process_noise_position = 0.0f; // 上次 Kalman 位置过程噪声
@@ -66,10 +62,6 @@ bool mouse_state_initialized = false; // 首帧惰性同步标志
 // 说明: 既用于首帧初始化，也用于变更检测命中后的状态推进，避免两处写法漂移。
 void syncPrevMouseSettings()
 {
-    prev_fovX = config.fovX;
-    prev_fovY = config.fovY;
-    prev_minSpeedMultiplier = config.minSpeedMultiplier;
-    prev_maxSpeedMultiplier = config.maxSpeedMultiplier;
     prev_predictionInterval = config.predictionInterval;
     prev_kalman_enabled = config.kalman_enabled;
     prev_kalman_process_noise_position = config.kalman_process_noise_position;
@@ -104,10 +96,6 @@ void notifyMouseThreadConfig()
         return;
     globalMouseThread->updateConfig(
         config.detection_resolution,
-        config.fovX,
-        config.fovY,
-        config.minSpeedMultiplier,
-        config.maxSpeedMultiplier,
         config.predictionInterval,
         config.auto_shoot,
         config.bScope_multiplier);
@@ -172,7 +160,7 @@ static HotkeyClassKeyCache g_hotkeyClassKeys;
 // 函数: draw_mouse_page
 // 作用: 核心函数，根据页面类型绘制鼠标设置的不同部分。
 // 参数: page - MouseSettingsPage 枚举值，定义要显示的内容类别
-// 说明: 该函数包含所有鼠标参数的 UI 绘制逻辑，包括 FOV、灵敏度、预测、曲线等。
+    // 说明: 该函数包含鼠标参数 UI 绘制逻辑；全局页仅保留输入/恢复默认，热键页承载局部调参。
 //      能根据 page 参数选择性地显示特定类别的设置，支持灵活的 UI 布局。
 static void draw_mouse_page(MouseSettingsPage page)
 {
@@ -182,53 +170,6 @@ static void draw_mouse_page(MouseSettingsPage page)
     {
         syncPrevMouseSettings();
         mouse_state_initialized = true;
-    }
-
-    if (shouldDrawMousePage(page, MouseSettingsPage::Profiles))
-    {
-        ImGui::PushID("mouse_section_global_fov");
-        ImGui::SeparatorText("全局 FOV 范围");
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-        bool fovXChanged = ImGui::InputInt("##fov_x", &config.fovX, 0, 0, ImGuiInputTextFlags_CharsDecimal);
-        ImGui::SameLine();
-        // 步进按钮就地钳制：ValidateIntParam 的语义是"越界即恢复默认值"而非 clamp，
-        // 若在下限 1 处再点一次 "-" 会被重置成 121，直接摧毁用户已调好的值。
-        if (ImGui::Button("-##fov_x"))
-        {
-            config.fovX = (std::max)(1, config.fovX - 1);
-            fovXChanged = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("+##fov_x"))
-        {
-            config.fovX = (std::min)(360, config.fovX + 1);
-            fovXChanged = true;
-        }
-        ImGui::SameLine(); ImGui::TextDisabled("FOV范围X [1, 360]");
-        ShowSettingTooltip("FOV范围X");
-        if (fovXChanged)
-            OverlayConfig_MarkDirty();
-        ValidateIntParam(&config.fovX, 1, 360, 121);
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-        bool fovYChanged = ImGui::InputInt("##fov_y", &config.fovY, 0, 0, ImGuiInputTextFlags_CharsDecimal);
-        ImGui::SameLine();
-        if (ImGui::Button("-##fov_y"))
-        {
-            config.fovY = (std::max)(1, config.fovY - 1);
-            fovYChanged = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("+##fov_y"))
-        {
-            config.fovY = (std::min)(360, config.fovY + 1);
-            fovYChanged = true;
-        }
-        ImGui::SameLine(); ImGui::TextDisabled("FOV范围Y [1, 360]");
-        ShowSettingTooltip("FOV范围Y");
-        if (fovYChanged)
-            OverlayConfig_MarkDirty();
-        ValidateIntParam(&config.fovY, 1, 360, 90);
-        ImGui::PopID();
     }
 
     if (shouldDrawMousePage(page, MouseSettingsPage::Profiles))
@@ -257,196 +198,12 @@ static void draw_mouse_page(MouseSettingsPage page)
         ImGui::PopID();
     }
 
-    if (shouldDrawMousePage(page, MouseSettingsPage::Profiles))
-    {
-        ImGui::PushID("mouse_section_game_profile");
-        ImGui::SeparatorText("游戏配置");
-
-        // 块: 收集并排序所有游戏配置名称
-        std::vector<std::string> profile_names; // 存储所有配置名
-        for (const auto& kv : config.game_profiles) // 遍历配置字典
-            profile_names.push_back(kv.first); // 提取配置名
-        std::sort(profile_names.begin(), profile_names.end()); // 字母序排序
-
-        // 块: 查找当前活跃配置在列表中的索引
-        static int selected_index = 0; // 当前选择的索引（保留状态）
-        for (size_t i = 0; i < profile_names.size(); ++i)
-        {
-            if (profile_names[i] == config.active_game) // 匹配当前活跃配置
-            {
-                selected_index = static_cast<int>(i); // 记录其索引
-                break;
-            }
-        }
-
-        // 块: 转换字符串向量为 C 风格字符串指针供 ImGui::Combo 使用
-        std::vector<const char*> profile_items; // ImGui Combo 需要的指针数组
-        for (const auto& name : profile_names)
-            profile_items.push_back(name.c_str()); // 获取每个字符串的 C 指针
-
-        ImGui::SetNextItemWidth(UiLayout::kComboLongWidth);
-        if (ImGui::Combo("正使用的配置文件，首次使用请添加新的配置名称", &selected_index, profile_items.data(), static_cast<int>(profile_items.size())))
-        { // 用户选择了新配置
-            config.active_game = profile_names[selected_index]; // 更新活跃配置
-            OverlayConfig_MarkDirty(); // 标记需要保存
-            notifyMouseThreadConfig(); // 通知鼠标线程使用新参数（内含空指针防护）
-        }
-
-        const auto& gp = config.currentProfile(); // 获取当前活跃配置
-
-        // 块: 显示当前配置的摘要信息（只读）
-        ImGui::Text("当前配置名: %s", gp.name.c_str()); // 配置名称
-        ImGui::Text("移动灵敏度: %.4f", gp.sens); // 全局移动灵敏度
-        ImGui::Text("水平灵敏度: %.4f", gp.yaw); // 水平转向灵敏度
-        ImGui::Text("垂直灵敏度: %.4f", gp.pitch); // 垂直转向灵敏度
-        ImGui::Text("视野的缩放: %s", gp.fovScaled ? "true" : "false"); // 视野缩放开关
-
-        // 块: 检查是否为 UNIFIED 配置（全局配置无法编辑）
-        if (gp.name != "UNIFIED") // 如果不是全局 UNIFIED 配置
-        {
-            Config::GameProfile& modifiable = config.game_profiles[gp.name]; // 获取可编辑的配置引用
-            bool changed = false; // 标记配置是否被修改
-
-            // 块: 将 double 参数转为 float 供 ImGui 输入框编辑
-            float sens_f = static_cast<float>(modifiable.sens); // 灵敏度转 float
-            float yaw_f = static_cast<float>(modifiable.yaw); // 水平灵敏度转 float
-            float pitch_f = static_cast<float>(modifiable.pitch); // 垂直灵敏度转 float
-            float baseFOV_f = static_cast<float>(modifiable.baseFOV); // 基础视角转 float
-
-            // 辅助: 对局部副本做范围校验，并把"发生了自动修正"也计入 changed。
-            // 原实现只修正局部副本、不回写 config：当 config.ini 存有越界值（例如 sens=0）时，
-            // 每帧都会打印一行"数值不合理…已恢复默认值"却永远修不好，同时 UI 显示 1.0 而
-            // Config::degToCounts() 实际读到 0 直接 return {0,0} —— 鼠标完全不动却毫无提示。
-            auto validateFloatSticky = [&](float* value, float minVal, float maxVal, float defVal)
-            {
-                const float before = *value;
-                ValidateFloatParam(value, minVal, maxVal, defVal);
-                if (*value != before)
-                    changed = true; // 触发下方回写，让修正真正落到 config
-            };
-
-            // 块: 灵敏度调整控件
-            // 步进按钮就地钳制，避免在下限处再点一次 "-" 被 ValidateFloatParam 重置为默认值，
-            // 抹掉用户耗时校准的灵敏度（不可撤销且立即落盘）。
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-            changed |= ImGui::InputFloat("##sensitivity", &sens_f, 0.0f, 0.0f, "%.4f", ImGuiInputTextFlags_CharsDecimal); // 文本输入
-            ImGui::SameLine(); if (ImGui::Button("-##sensitivity")) { sens_f = (std::max)(0.01f, sens_f - 0.0001f); changed = true; } // 减少按钮
-            ImGui::SameLine(); if (ImGui::Button("+##sensitivity")) { sens_f = (std::min)(100.0f, sens_f + 0.0001f); changed = true; } // 增加按钮
-            ImGui::SameLine(); ImGui::TextDisabled("移动灵敏度 [0.01, 100]"); // 范围提示
-            ShowSettingTooltip("灵敏度"); // 帮助提示
-            validateFloatSticky(&sens_f, 0.01f, 100.0f, 1.0f); // 范围验证（修正即回写）
-
-            // 块: 水平灵敏度调整
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-            changed |= ImGui::InputFloat("##yaw", &yaw_f, 0.0f, 0.0f, "%.4f", ImGuiInputTextFlags_CharsDecimal); // 文本输入
-            ImGui::SameLine(); if (ImGui::Button("-##yaw")) { yaw_f = (std::max)(0.0001f, yaw_f - 0.0001f); changed = true; } // 减少
-            ImGui::SameLine(); if (ImGui::Button("+##yaw")) { yaw_f = (std::min)(10.0f, yaw_f + 0.0001f); changed = true; } // 增加
-            ImGui::SameLine(); ImGui::TextDisabled("水平灵敏度 [0.0001, 10]"); // 范围
-            ShowSettingTooltip("水平灵敏度");
-            validateFloatSticky(&yaw_f, 0.0001f, 10.0f, 0.022f); // 验证（修正即回写）
-
-            // 块: 垂直灵敏度调整
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-            changed |= ImGui::InputFloat("##pitch", &pitch_f, 0.0f, 0.0f, "%.4f", ImGuiInputTextFlags_CharsDecimal); // 文本输入
-            ImGui::SameLine(); if (ImGui::Button("-##pitch")) { pitch_f = (std::max)(0.0001f, pitch_f - 0.0001f); changed = true; } // 减少
-            ImGui::SameLine(); if (ImGui::Button("+##pitch")) { pitch_f = (std::min)(10.0f, pitch_f + 0.0001f); changed = true; } // 增加
-            ImGui::SameLine(); ImGui::TextDisabled("垂直灵敏度 [0.0001, 10]"); // 范围
-            ShowSettingTooltip("垂直灵敏度");
-            validateFloatSticky(&pitch_f, 0.0001f, 10.0f, 0.022f); // 验证（修正即回写）
-
-            // 块: 视野缩放开关及其条件参数
-            changed |= ImGui::Checkbox("视野缩放值", &modifiable.fovScaled); // 启用/禁用视野缩放
-            if (modifiable.fovScaled) // 仅当启用时显示基础视角参数
-            {
-                ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-                changed |= ImGui::InputFloat("##base_fov", &baseFOV_f, 0.0f, 0.0f, "%.4f", ImGuiInputTextFlags_CharsDecimal); // 文本输入
-                ImGui::SameLine(); if (ImGui::Button("-##base_fov")) { baseFOV_f = (std::max)(1.0f, baseFOV_f - 0.1f); changed = true; } // 减少
-                ImGui::SameLine(); if (ImGui::Button("+##base_fov")) { baseFOV_f = (std::min)(200.0f, baseFOV_f + 0.1f); changed = true; } // 增加
-                ImGui::SameLine(); ImGui::TextDisabled("基础视野 [1, 200]"); // 范围
-                ShowSettingTooltip("基础视野");
-                validateFloatSticky(&baseFOV_f, 1.0f, 200.0f, 90.0f); // 验证（修正即回写）
-            }
-
-            // 块: 检测到更改则将 float 转回 double 并保存
-            if (changed) // 如果用户修改了任何参数
-            {
-                modifiable.sens = static_cast<double>(sens_f); // 转回 double
-                modifiable.yaw = static_cast<double>(yaw_f);
-                modifiable.pitch = static_cast<double>(pitch_f);
-                modifiable.baseFOV = static_cast<double>(baseFOV_f);
-                OverlayConfig_MarkDirty(); // 标记配置已更改（幂等，原重复调用已去除）
-            }
-        }
-
-        ImGui::PopID();
-    }
-
-    if (shouldDrawMousePage(page, MouseSettingsPage::Profiles))
-    {
-        ImGui::PushID("mouse_section_manage_profiles");
-        ImGui::SeparatorText("配置管理");
-        static char new_profile_name[64] = "";
-        bool addProfile = false;
-        {
-            ImGui::TextUnformatted("新配置名称");
-            ImGui::SameLine();
-            const float buttonW = UiLayout::kActionButtonWidth;
-            ImGui::SetNextItemWidth(UiLayout::kTextMediumWidth);
-            ImGui::InputText("##value", new_profile_name, sizeof(new_profile_name));
-            ImGui::SameLine();
-            addProfile = ImGui::Button("添加", ImVec2(buttonW, 0.0f));
-            ShowSettingTooltip("新配置名称");
-        }
-        if (addProfile)
-        {
-            std::string name = std::string(new_profile_name);
-            if (!name.empty() && config.game_profiles.count(name) == 0)
-            {
-                Config::GameProfile gp;
-                gp.name = name;
-                gp.sens = 1.0;
-                gp.yaw = 0.022;
-                gp.pitch = 0.022;
-                gp.fovScaled = false;
-                gp.baseFOV = 90.0;
-                config.game_profiles[name] = gp;
-                config.active_game = name;
-                OverlayConfig_MarkDirty();
-                new_profile_name[0] = '\0'; // clear
-            }
-        }
-
-        const auto& gp = config.currentProfile();
-        if (gp.name != "UNIFIED")
-        {
-            ImGui::PushID("delete_current_profile");
-            if (ImGui::Button("删除当前配置", ImVec2(UiLayout::kActionButtonWidth, 0.0f)))
-            {
-                // currentProfile() 返回的是 game_profiles 内部元素的引用，gp.name 这块 std::string
-                // 内存就位于将被销毁的节点里。直接把它当作 erase(key) 的实参属于"用容器自身元素
-                // 删除自己"的 use-after-free 模式；先拷贝一份 key 脱离容器再删。
-                const std::string profileNameToErase = gp.name;
-                config.game_profiles.erase(profileNameToErase);
-                if (config.game_profiles.count("UNIFIED") != 0)
-                    config.active_game = "UNIFIED";
-                else if (!config.game_profiles.empty())
-                    config.active_game = config.game_profiles.begin()->first;
-                else
-                    config.active_game = "UNIFIED";
-
-                OverlayConfig_MarkDirty();
-            }
-            ImGui::PopID();
-        }
-
-        ImGui::PopID();
-    }
 
     if (shouldDrawMousePage(page, MouseSettingsPage::Input))
     {
         ImGui::PushID("mouse_section_input_method");
         // 常量表改为 static，避免每帧构造 2 个 vector<std::string>（8 次堆分配）。
-        static const char* const kInputMethodLabels[] = { "WIN32(系统)", "KmboxNet", "KmboxA", "Makcu" };
+        static const char* const kInputMethodLabels[] = { "WIN32(标准)", "KmboxNet", "KmboxA", "Makcu" };
         static const char* const kInputMethodValues[] = { "WIN32", "KMBOX_NET", "KMBOX_A", "MAKCU" };
         static constexpr int kInputMethodCount = static_cast<int>(IM_ARRAYSIZE(kInputMethodLabels));
         static_assert(IM_ARRAYSIZE(kInputMethodLabels) == IM_ARRAYSIZE(kInputMethodValues),
@@ -464,7 +221,7 @@ static void draw_mouse_page(MouseSettingsPage page)
             }
         }
 
-        ImGui::SetNextItemWidth(UiLayout::kComboLongWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         if (ImGui::Combo("输入方式", &input_method_index, method_items, kInputMethodCount))
         {
             // ImGui::Combo 内部已对 current_item 做 [0, items_count) 守卫，此处再兜底一次。
@@ -483,7 +240,7 @@ static void draw_mouse_page(MouseSettingsPage page)
 
         if (config.input_method == "WIN32")
         {
-            ImGui::Text("系统原生的鼠标输入方式。建议用 Kmbox 或 Makcu 后端。");
+            ImGui::Text("标准鼠标输入方式。建议用 Kmbox 或 Makcu 后端。");
             ImGui::TextDisabled("有风险，此方法可能被检测。");
         }
         else if (config.input_method == "KMBOX_NET")
@@ -508,11 +265,11 @@ static void draw_mouse_page(MouseSettingsPage page)
                 last_uuid = config.kmbox_net_uuid;
             }
 
-            ImGui::SetNextItemWidth(UiLayout::kTextShortWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             ImGui::InputText("IP地址", ip, sizeof(ip));
-            ImGui::SetNextItemWidth(UiLayout::kTextShortWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             ImGui::InputText("端口", port, sizeof(port));
-            ImGui::SetNextItemWidth(UiLayout::kTextShortWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             ImGui::InputText("UUID", uuid, sizeof(uuid));
 
             ImGui::PushID("kmbox_net_save_reconnect");
@@ -530,7 +287,6 @@ static void draw_mouse_page(MouseSettingsPage page)
             ImGui::PopID();
 
             bool kmboxNetConnected = false;
-            bool kmboxNetConnecting = false;
             {
                 std::lock_guard<std::mutex> lock(inputDevicesMutex);
                 KmboxNetConnection* device =
@@ -538,27 +294,21 @@ static void draw_mouse_page(MouseSettingsPage page)
                     ? activeMouseInputOwner->kmboxNet()
                     : nullptr;
                 kmboxNetConnected = device && device->isOpen();
-                kmboxNetConnecting = activeMouseInputOwner &&
-                    std::string(activeMouseInputOwner->name()) == "KMBOX_NET" &&
-                    activeMouseInputOwner->isConnecting();
             }
 
             if (kmboxNetConnected)
             {
                 ImGui::Text("kmboxNet已连接");
             }
-            else if (kmboxNetConnecting)
-            {
-                ImGui::TextDisabled("kmboxNet连接中");
-            }
             else
             {
                 ImGui::TextDisabled("kmboxNet未连接");
             }
 
+            if (!kmboxNetConnected)
+                ImGui::BeginDisabled();
+
               ImGui::PushID("kmbox_net_reboot");
-              if (!kmboxNetConnected)
-                  ImGui::BeginDisabled();
               if (ImGui::Button("重启设备", ImVec2(UiLayout::kActionButtonWidth, 0.0f)))
               {
                 std::lock_guard<std::mutex> lock(inputDevicesMutex);
@@ -569,8 +319,6 @@ static void draw_mouse_page(MouseSettingsPage page)
                 if (device && device->isOpen())
                       device->reboot();
               }
-              if (!kmboxNetConnected)
-                  ImGui::EndDisabled();
               ImGui::PopID();
 
                ImGui::PushID("kmbox_net_release_all");
@@ -581,15 +329,12 @@ static void draw_mouse_page(MouseSettingsPage page)
                       activeMouseInputOwner && std::string(activeMouseInputOwner->name()) == "KMBOX_NET"
                       ? activeMouseInputOwner->kmboxNet()
                       : nullptr;
-                  // 断线/掉 ACK 时仍允许用户手动释放：不要求 device->isOpen()。
-                  if (device)
+                  if (device && device->isOpen())
                        device->releaseAllButtons();
                }
                ImGui::PopID();
 
                ImGui::PushID("kmbox_net_image");
-               if (!kmboxNetConnected)
-                   ImGui::BeginDisabled();
                if (ImGui::Button("更换图像", ImVec2(UiLayout::kActionButtonWidth, 0.0f)))
             {
                 std::lock_guard<std::mutex> lock(inputDevicesMutex);
@@ -603,9 +348,10 @@ static void draw_mouse_page(MouseSettingsPage page)
                      device->lcdPicture(gImage_128x160);
                  }
              }
-             if (!kmboxNetConnected)
-                 ImGui::EndDisabled();
              ImGui::PopID();
+
+            if (!kmboxNetConnected)
+                ImGui::EndDisabled();
         }
         else if (config.input_method == "KMBOX_A")
         {
@@ -619,7 +365,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 last_pidvid = config.kmbox_a_pidvid;
             }
 
-            ImGui::SetNextItemWidth(UiLayout::kTextShortWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             ImGui::InputText("PIDVID", pidvid, sizeof(pidvid));
             ImGui::TextDisabled("格式: PPPPVVVV（单字段）");
 
@@ -633,21 +379,7 @@ static void draw_mouse_page(MouseSettingsPage page)
             }
             ImGui::PopID();
 
-            // 连接状态必须在 inputDevicesMutex 下、经 activeMouseInputOwner 查询。
-            // 直接读裸全局 kmboxASerial 会与鼠标线程的 createInputDevices() 竞争：
-            // 后者先在锁内把该全局置空，再在锁外 reset() 析构 KmboxAConnection；
-            // 无锁读者可能已取到旧的非空指针，随后对已析构对象调用 isOpen()（UAF）。
-            bool kmboxAConnected = false;
-            {
-                std::lock_guard<std::mutex> lock(inputDevicesMutex);
-                KmboxAConnection* device =
-                    activeMouseInputOwner && std::string(activeMouseInputOwner->name()) == "KMBOX_A"
-                    ? activeMouseInputOwner->kmboxA()
-                    : nullptr;
-                kmboxAConnected = device && device->isOpen();
-            }
-
-            if (kmboxAConnected)
+            if (kmboxASerial && kmboxASerial->isOpen())
             {
                 ImGui::Text("kmboxA已连接");
             }
@@ -682,7 +414,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            ImGui::SetNextItemWidth(UiLayout::kComboShortWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             if (ImGui::Combo("Makcu端口", &port_index, kMakcuPortItems, kMakcuPortCount))
             {
                 if (port_index >= 0 && port_index < kMakcuPortCount)
@@ -709,7 +441,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            ImGui::SetNextItemWidth(UiLayout::kComboShortWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             if (ImGui::Combo("Makcu波特率", &baud_index, kMakcuBaudItems, kMakcuBaudCount))
             {
                 if (baud_index >= 0 && baud_index < kMakcuBaudCount)
@@ -720,19 +452,7 @@ static void draw_mouse_page(MouseSettingsPage page)
                 }
             }
 
-            // 同 KMBOX_A：经 inputDevicesMutex + activeMouseInputOwner 查询，
-            // 避免与 createInputDevices() 的"锁内置空 / 锁外析构"序列构成 UAF。
-            bool makcuConnected = false;
-            {
-                std::lock_guard<std::mutex> lock(inputDevicesMutex);
-                MakcuConnection* device =
-                    activeMouseInputOwner && std::string(activeMouseInputOwner->name()) == "MAKCU"
-                    ? activeMouseInputOwner->makcu()
-                    : nullptr;
-                makcuConnected = device && device->isOpen();
-            }
-
-            if (makcuConnected)
+            if (makcuSerial && makcuSerial->isOpen())
             {
                 ImGui::Text("Makcu已连接");
             }
@@ -832,11 +552,7 @@ static void draw_mouse_page(MouseSettingsPage page)
         ImGui::PopID();
     }
 
-    if (prev_fovX != config.fovX ||
-        prev_fovY != config.fovY ||
-        prev_minSpeedMultiplier != config.minSpeedMultiplier ||
-        prev_maxSpeedMultiplier != config.maxSpeedMultiplier ||
-        prev_predictionInterval != config.predictionInterval ||
+    if (prev_predictionInterval != config.predictionInterval ||
         prev_kalman_enabled != config.kalman_enabled ||
         prev_kalman_process_noise_position != config.kalman_process_noise_position ||
         prev_kalman_process_noise_velocity != config.kalman_process_noise_velocity ||
@@ -852,10 +568,6 @@ static void draw_mouse_page(MouseSettingsPage page)
         prev_speedCurveExponent != config.speedCurveExponent ||
         prev_snapBoostFactor != config.snapBoostFactor)
     {
-        prev_fovX = config.fovX;
-        prev_fovY = config.fovY;
-        prev_minSpeedMultiplier = config.minSpeedMultiplier;
-        prev_maxSpeedMultiplier = config.maxSpeedMultiplier;
         prev_predictionInterval = config.predictionInterval;
         prev_kalman_enabled = config.kalman_enabled;
         prev_kalman_process_noise_position = config.kalman_process_noise_position;
@@ -904,46 +616,6 @@ static void draw_mouse_page(MouseSettingsPage page)
 
         OverlayConfig_MarkDirty();
     }
-}
-
-// 函数: draw_mouse
-// 作用: 绘制鼠标设置主面板，显示所有鼠标相关配置选项。
-// 说明: 这是从菜单调用的主入口，负责展示完整的鼠标参数界面。
-void draw_mouse()
-{
-    draw_mouse_page(MouseSettingsPage::All); // 显示所有内容（非过滤）
-}
-
-// 函数: draw_mouse_movement
-// 作用: 绘制鼠标移动/反应速度相关的设置面板。
-// 说明: 仅显示与鼠标运动相关的参数，如灵敏度、加速等。
-void draw_mouse_movement()
-{
-    draw_mouse_page(MouseSettingsPage::Movement); // 仅显示移动相关内容
-}
-
-// 函数: draw_mouse_prediction
-// 作用: 绘制目标预测与轨迹跟随的设置面板。
-// 说明: 仅显示与预测逻辑相关的参数，如预测间隔、Kalman 滤波等。
-void draw_mouse_prediction()
-{
-    draw_mouse_page(MouseSettingsPage::Prediction); // 仅显示预测相关内容
-}
-
-// 函数: draw_mouse_assist
-// 作用: 绘制鼠标辅助工具的设置面板。
-// 说明: 仅显示修饰性功能，如曲线、扰动、吸附等辅助参数。
-void draw_mouse_assist()
-{
-    draw_mouse_page(MouseSettingsPage::Assist); // 仅显示辅助相关内容
-}
-
-// 函数: draw_mouse_profiles
-// 作用: 绘制游戏配置管理面板。
-// 说明: 允许用户创建、切换和编辑游戏特定的配置文件。
-void draw_mouse_profiles()
-{
-    draw_mouse_page(MouseSettingsPage::Profiles); // 仅显示配置管理相关内容
 }
 
 // 函数: draw_mouse_input
@@ -1058,10 +730,10 @@ void draw_hotkey_profile(std::size_t slot)
 
     bool localAutoAim = profile.localBool("auto_aim", config.auto_aim);
     const float aimControlCheckboxWidth = ImGui::GetFrameHeight() * 2.0f +
-        ImGui::GetStyle().ItemInnerSpacing.x * 2.0f + ImGui::CalcTextSize("自动瞄准开关").x +
+        ImGui::GetStyle().ItemInnerSpacing.x * 2.0f + ImGui::CalcTextSize("不用按键自动瞄准").x +
         ImGui::CalcTextSize("保持目标锁定").x + ImGui::GetStyle().ItemSpacing.x;
     const bool fitAimControlCheckboxes = ImGui::GetContentRegionAvail().x >= aimControlCheckboxWidth;
-    if (ImGui::Checkbox("勾选=不用按键，自动对准。不勾=按住热键，才会对准。", &localAutoAim))
+    if (ImGui::Checkbox("不用按键自动瞄准", &localAutoAim))
     {
         profile.setLocalBool("auto_aim", localAutoAim);
         OverlayConfig_MarkDirty();
@@ -1085,17 +757,16 @@ void draw_hotkey_profile(std::size_t slot)
 
 
     // ---- MouseController 参数面板 (依据 鼠标调参指南.md) ----
-    // 直接写 config.mc_*, 经 syncMouseController() 推送给算法;
-    // 不写 profile.localXxx, 避免制造幽灵控件。
+    // 写入当前热键 profile.localXxx; 鼠标线程按 active_mouse_hotkey_slot 读取并推送。
     if (ImGui::CollapsingHeader("MouseController 参数", ImGuiTreeNodeFlags_None))
     {
         // 本地浮点输入助手: 写 config.mc_* + MarkDirty (带 -/+ 步进与范围钳制)
         // 控件 ID 改用 PushID(id) + 固定字面量，替代原实现每次调用构造
         // "##mc_" + id / "-##mc_" + id / "+##mc_" + id 三个 std::string（20 控件 × 3 次/帧堆分配）。
         // ID 唯一性由 PushID(id) 参与 hash 种子保证，行为不变。
-        auto mcFloat = [&](const char* label, const char* id, float& ref, float minV, float maxV, float stepV) {
-            float v = ref;
-            ImGui::PushID(id);
+        auto mcFloat = [&](const char* label, const char* key, float fallback, float minV, float maxV, float stepV) {
+            float v = profile.localFloat(key, fallback);
+            ImGui::PushID(key);
             ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
             bool changed = ImGui::InputFloat("##v", &v, 0.0f, 0.0f);
             ImGui::SameLine(); if (ImGui::Button("-")) { v -= stepV; changed = true; }
@@ -1103,48 +774,95 @@ void draw_hotkey_profile(std::size_t slot)
             ImGui::SameLine(); ImGui::TextDisabled("%s [%.4g, %.4g]", label, minV, maxV);
             ShowSettingTooltip(label);
             ImGui::PopID();
-            if (changed) { ref = std::clamp(v, minV, maxV); OverlayConfig_MarkDirty(); }
+            if (changed)
+            {
+                profile.setLocalFloat(key, std::clamp(v, minV, maxV));
+                OverlayConfig_MarkDirty();
+                notifyMouseThreadConfig();
+            }
         };
 
-        bool localMc = config.mc_enabled;
-        if (ImGui::Checkbox("启用MouseController模块(总开关)", &localMc))
+        ImGui::TextDisabled("以下参数仅对当前热键生效；模块总开关由系统内部强制启用。");
+        if (ImGui::Button("一键还原初始参数"))
         {
-            config.mc_enabled = localMc;
+            profile.setLocalFloat("x_tracking", 4.5f);
+            profile.setLocalFloat("x_damping", 0.05f);
+            profile.setLocalFloat("x_maxspeed", 2400.0f);
+            profile.setLocalFloat("x_integral", 0.05f);
+            profile.setLocalFloat("x_deadzone", 1.0f);
+            profile.setLocalFloat("y_tracking", 4.5f);
+            profile.setLocalFloat("y_damping", 0.05f);
+            profile.setLocalFloat("y_maxspeed", 2400.0f);
+            profile.setLocalFloat("y_integral", 0.05f);
+            profile.setLocalFloat("y_deadzone", 1.0f);
+            profile.setLocalFloat("maxstep", 35.0f);
+            profile.setLocalFloat("retarget", 60.0f);
+            profile.setLocalFloat("ahead_min", 0.03f);
+            profile.setLocalFloat("ahead_max", 0.12f);
+            profile.setLocalFloat("dur_min", 0.12f);
+            profile.setLocalFloat("dur_max", 0.45f);
+            profile.setLocalFloat("kalman_q", 1500.0f);
+            profile.setLocalFloat("kalman_r", 30.0f);
+            profile.setLocalInt("humanizer_style", 0);
+            profile.setLocalFloat("humanizer_overshoot", 0.0f);
+            profile.setLocalFloat("humanizer_power_law", 0.0f);
             OverlayConfig_MarkDirty();
+            notifyMouseThreadConfig();
         }
 
         if (ImGui::TreeNodeEx("X 轴调参", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("追踪强度 tracking", "x_track", config.mc_x_tracking, 1.0f, 999.0f, 0.1f);
-            mcFloat("震荡抑制 damping",  "x_damp", config.mc_x_damping, 0.01f, 0.99f, 0.01f);
-            mcFloat("最大速度 maxSpeed", "x_speed", config.mc_x_maxspeed, 100.0f, 9999.0f, 10.0f);
-            mcFloat("积分增益 integral", "x_int", config.mc_x_integral, 0.0f, 999.0f, 0.1f);
-            mcFloat("死区 deadzone",     "x_dz", config.mc_x_deadzone, 0.0f, 999.0f, 1.0f);
+            mcFloat("追踪强度 tracking", "x_tracking", config.mc_x_tracking, 2.0f, 6.0f, 0.5f);
+            mcFloat("震荡抑制 damping",  "x_damping", config.mc_x_damping, 0.02f, 0.12f, 0.01f);
+            mcFloat("最大速度 maxSpeed", "x_maxspeed", config.mc_x_maxspeed, 800.0f, 3000.0f, 100.0f);
+            mcFloat("积分增益 integral", "x_integral", config.mc_x_integral, 0.0f, 2.0f, 0.05f);
+            mcFloat("死区 deadzone",     "x_deadzone", config.mc_x_deadzone, 1.0f, 5.0f, 1.0f);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Y 轴调参", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("追踪强度 tracking", "y_track", config.mc_y_tracking, 1.0f, 999.0f, 0.1f);
-            mcFloat("震荡抑制 damping",  "y_damp", config.mc_y_damping, 0.01f, 0.99f, 0.01f);
-            mcFloat("最大速度 maxSpeed", "y_speed", config.mc_y_maxspeed, 100.0f, 9999.0f, 10.0f);
-            mcFloat("积分增益 integral", "y_int", config.mc_y_integral, 0.0f, 999.0f, 0.1f);
-            mcFloat("死区 deadzone",     "y_dz", config.mc_y_deadzone, 0.0f, 999.0f, 1.0f);
+            mcFloat("追踪强度 tracking", "y_tracking", config.mc_y_tracking, 2.0f, 6.0f, 0.5f);
+            mcFloat("震荡抑制 damping",  "y_damping", config.mc_y_damping, 0.02f, 0.12f, 0.01f);
+            mcFloat("最大速度 maxSpeed", "y_maxspeed", config.mc_y_maxspeed, 800.0f, 3000.0f, 100.0f);
+            mcFloat("积分增益 integral", "y_integral", config.mc_y_integral, 0.0f, 2.0f, 0.05f);
+            mcFloat("死区 deadzone",     "y_deadzone", config.mc_y_deadzone, 1.0f, 5.0f, 1.0f);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("全局参数", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("单帧最大移动 maxStepPerFrame", "g_maxstep", config.mc_maxstep, 1.0f, 999.0f, 5.0f);
-            mcFloat("重瞄准阈值 retargetThreshold",  "g_retarget", config.mc_retarget, 1.0f, 999.0f, 5.0f);
+            mcFloat("单帧最大移动 maxStepPerFrame", "maxstep", config.mc_maxstep, 15.0f, 50.0f, 5.0f);
+            mcFloat("重瞄准阈值 retargetThreshold",  "retarget", config.mc_retarget, 10.0f, 200.0f, 5.0f);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("算法参数", ImGuiTreeNodeFlags_DefaultOpen))
         {
-            mcFloat("自适应前瞻 最小(s)", "a_min", config.mc_ahead_min, 0.01f, 1.00f, 0.01f);
-            mcFloat("自适应前瞻 最大(s)", "a_max", config.mc_ahead_max, 0.01f, 1.00f, 0.01f);
-            mcFloat("轨迹时长 最小(s)",   "d_min", config.mc_dur_min, 0.01f, 1.00f, 0.01f);
-            mcFloat("轨迹时长 最大(s)",   "d_max", config.mc_dur_max, 0.01f, 1.00f, 0.01f);
-            mcFloat("Kalman 过程噪声 q",  "k_q", config.mc_kalman_q, 1.0f, 9999.0f, 100.0f);
-            mcFloat("Kalman 测量噪声 r",  "k_r", config.mc_kalman_r, 1.0f, 9999.0f, 5.0f);
+            mcFloat("自适应前瞻 最小(s)", "ahead_min", config.mc_ahead_min, 0.02f, 0.15f, 0.01f);
+            mcFloat("自适应前瞻 最大(s)", "ahead_max", config.mc_ahead_max, 0.05f, 0.30f, 0.01f);
+            mcFloat("轨迹时长 最小(s)",   "dur_min", config.mc_dur_min, 0.10f, 0.60f, 0.01f);
+            mcFloat("轨迹时长 最大(s)",   "dur_max", config.mc_dur_max, 0.15f, 1.00f, 0.01f);
+            mcFloat("Kalman 过程噪声 q",  "kalman_q", config.mc_kalman_q, 100.0f, 5000.0f, 100.0f);
+            mcFloat("Kalman 测量噪声 r",  "kalman_r", config.mc_kalman_r, 5.0f, 200.0f, 5.0f);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("可选增强（默认关闭）", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            static const char* const kHumanStyleLabels[] = { "关闭", "轻度", "中度", "高度" };
+            int humanStyle = std::clamp(profile.localInt("humanizer_style", 0), 0, 3);
+            ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
+            if (ImGui::Combo("拟人化曲线", &humanStyle, kHumanStyleLabels, 4))
+            {
+                profile.setLocalInt("humanizer_style", std::clamp(humanStyle, 0, 3));
+                OverlayConfig_MarkDirty();
+                notifyMouseThreadConfig();
+            }
+            mcFloat("末尾子动作幅度 px", "humanizer_overshoot", 0.0f, 0.0f, 10.0f, 0.5f);
+            bool powerLaw = profile.localFloat("humanizer_power_law", 0.0f) > 0.5f;
+            if (ImGui::Checkbox("启用 2/3 幂律", &powerLaw))
+            {
+                profile.setLocalFloat("humanizer_power_law", powerLaw ? 1.0f : 0.0f);
+                OverlayConfig_MarkDirty();
+                notifyMouseThreadConfig();
+            }
             ImGui::TreePop();
         }
     }
@@ -1202,11 +920,8 @@ void draw_hotkey_profile(std::size_t slot)
             continue;
         bool enabled = profile.localBool(g_hotkeyClassKeys.enabled[static_cast<std::size_t>(cls)], false);
         ImGui::PushID(cls);
-        // 优化：原每帧为 15 个类别构造 std::string（"类别N"）触发堆分配。
-        // 改用栈上定长缓冲区，零分配。
-        char classLabel[16];
-        snprintf(classLabel, sizeof(classLabel), "类别%d", cls);
-        ImGui::TextUnformatted(classLabel);
+        const std::string classLabel = "类别" + std::to_string(cls);
+        ImGui::TextUnformatted(classLabel.c_str());
         if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
         {
             ImGui::SetDragDropPayload("AIMBOT_HOTKEY_CLASS_ORDER", &cls, sizeof(cls));
@@ -1344,7 +1059,7 @@ void draw_hotkey_profile(std::size_t slot)
         }
         bool enabledForHotkey = profile.localBool("trigger_enabled_for_hotkey", true);
         if (ImGui::Checkbox("正式启用此热键扳机", &enabledForHotkey)) { profile.setLocalBool("trigger_enabled_for_hotkey", enabledForHotkey); OverlayConfig_MarkDirty(); }
-        ImGui::TextDisabled("目标丢失时停止开火：内部强制启用");
+        ImGui::TextDisabled("目标丢失时停止开火：内部强制开启");
         localIntInput("目标丢失时，松开火键的延迟(ms)", "trigger_targeting_stop_fire_delay_ms", 0, 5000, trigger.stop_fire_delay_ms);
         localIntInput("目标出现时，按开火键的延迟(ms)", "trigger_targeting_key_delay_ms", 0, 5000, trigger.key_delay_ms);
         localIntInput("前摇延迟(ms)", "trigger_targeting_pre_fire_delay_ms", 0, 5000, trigger.pre_fire_delay_ms);

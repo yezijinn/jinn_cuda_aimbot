@@ -58,7 +58,7 @@ bool drawButtonBindingRows(const char* rowLabel, std::vector<std::string>& bindi
     // 使用 rowLabel 作为 ImGui 的 ID 片段，避免与其他控件冲突
     ImGui::PushID(rowLabel);
 
-    // 遍历每个绑定并绘制：标签、下拉框、添加/删除按钮
+    // 遍历每个绑定并绘制：标签、下拉框
     for (size_t i = 0; i < bindings.size();)
     {
         // 引用当前绑定的字符串，便于直接修改
@@ -76,8 +76,7 @@ bool drawButtonBindingRows(const char* rowLabel, std::vector<std::string>& bindi
         // 显示文本标签
         ImGui::TextUnformatted(indexedLabel.c_str());
         ImGui::SameLine(); // 在同一行继续绘制下一个控件
-        const float actionBtnW = ImGui::GetFrameHeight(); // 按钮宽度参考
-        ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth); // 下拉宽度设置
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth); // 下拉宽度设置
 
         // 绘制下拉选择（Combo），显示可绑定的按键名
         if (ImGui::Combo("##value", &currentIndex, key_display_names_cstrs.data(), static_cast<int>(key_display_names_cstrs.size())))
@@ -87,40 +86,9 @@ bool drawButtonBindingRows(const char* rowLabel, std::vector<std::string>& bindi
             changed = true; // 标记变更
         }
 
-        // 在下拉后绘制添加绑定的按钮
-        ImGui::SameLine(0.0f, 4.0f);
-        if (ImGui::Button("+", ImVec2(actionBtnW, 0.0f)))
-        {
-            // 在当前绑定后插入一个新的占位绑定
-            bindings.insert(bindings.begin() + static_cast<std::vector<std::string>::difference_type>(i + 1), "None");
-            changed = true; // 标记变更
-        }
-
-        // 在添加按钮后绘制删除按钮，并处理删除逻辑
-        ImGui::SameLine(0.0f, 3.0f);
-        bool removedCurrent = false; // 本次循环是否删除了当前项
-        if (ImGui::Button("-", ImVec2(actionBtnW, 0.0f)))
-        {
-            if (bindings.size() <= 1 && keepAtLeastOne)
-            {
-                // 如果必须至少保留一个绑定，则将其重置为 "None"，而不是删除
-                bindings[0] = "None";
-            }
-            else
-            {
-                // 否则直接删除当前绑定
-                bindings.erase(bindings.begin() + static_cast<std::vector<std::string>::difference_type>(i));
-                removedCurrent = true; // 标记已删除以便跳过 i++
-            }
-            changed = true; // 标记变更
-        }
 
         ImGui::PopID(); // 弹出 PushID(static_cast<int>(i))
-
-        if (removedCurrent)
-            continue; // 如果删除了当前项，继续循环而不递增 i
-
-        ++i; // 仅在未删除当前项时递增索引
+        ++i;
     }
 
     ImGui::PopID(); // 弹出最外层 PushID(rowLabel)

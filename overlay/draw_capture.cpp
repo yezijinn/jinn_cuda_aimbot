@@ -1,4 +1,4 @@
-﻿#define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #define _WINSOCKAPI_
 #include <winsock2.h>
 #include <Windows.h>
@@ -42,9 +42,9 @@ static bool udp_settings_init = false;
 static bool virtual_camera_settings_pending = false;
 static std::future<OnnxInspectionResult> onnx_inspection_task;
 static std::string onnx_inspection_text;
-static std::string onnx_inspection_path;
+static std::filesystem::path onnx_inspection_path;
 static bool onnx_inspection_running = false;
-static std::string onnx_inspection_task_path;
+static std::filesystem::path onnx_inspection_task_path;
 
 enum class OnnxInspectionMode
 {
@@ -59,7 +59,7 @@ static bool onnx_inspection_mode_queued = false;
 static constexpr const char* kOnnxInspectionPrompt =
     "提示：你还未选择.onnx文件，请先指定一个.onnx文件。";
 
-static std::string chooseOnnxFile()
+static std::filesystem::path chooseOnnxFile()
 {
     wchar_t fileName[MAX_PATH] = L"";
     OPENFILENAMEW dialog{};
@@ -71,16 +71,9 @@ static std::string chooseOnnxFile()
     dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
 
     if (!GetOpenFileNameW(&dialog))
-        return {};
+    return {};
 
-    const int utf8Length = WideCharToMultiByte(CP_UTF8, 0, fileName, -1, nullptr, 0, nullptr, nullptr);
-    if (utf8Length <= 1)
-        return {};
-
-    std::string utf8Path(static_cast<std::size_t>(utf8Length), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, fileName, -1, utf8Path.data(), utf8Length, nullptr, nullptr);
-    utf8Path.resize(static_cast<std::size_t>(utf8Length - 1));
-    return utf8Path;
+    return std::filesystem::path(fileName);
 }
 
 static void startOnnxInspection(OnnxInspectionMode mode)
@@ -89,7 +82,7 @@ static void startOnnxInspection(OnnxInspectionMode mode)
     onnx_inspection_task_path = onnx_inspection_path;
     onnx_inspection_text = "正在读取模型，请稍候...";
     onnx_inspection_running = true;
-    const std::string modelPath = onnx_inspection_task_path;
+    const std::filesystem::path modelPath = onnx_inspection_task_path;
     try
     {
         onnx_inspection_task = std::async(std::launch::async, [modelPath] {
@@ -209,7 +202,7 @@ void draw_model_path_settings()
     std::vector<const char*> items;
     items.reserve(models.size());
     for (const auto& model : models) items.push_back(model.c_str());
-    ImGui::SetNextItemWidth(UiLayout::kComboLongWidth);
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
     if (ImGui::Combo("模型文件", &selected, items.data(), static_cast<int>(items.size())))
     {
         config.ai_model = models[selected];
@@ -228,16 +221,12 @@ void draw_capture_and_model_settings()
 {
     draw_model_path_settings();
     draw_capture_general_settings();
-    // Keep source-specific controls beside the capture method selector.
-    draw_capture_source_settings();
-    ImGui::Spacing();
-    draw_stats_summary();
     const StartupOnnxReport& report = startupOnnxReport();
     if (report.success)
     {
-        std::string reportText = report.text;
-        ImGui::InputTextMultiline("##startup_onnx_report", &reportText,
-            ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 8.0f), ImGuiInputTextFlags_ReadOnly);
+        ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+        ImGui::TextUnformatted(report.text.c_str());
+        ImGui::PopTextWrapPos();
     }
 }
 
@@ -249,7 +238,7 @@ void draw_performance_settings()
 
     if (ImGui::Button("选择.onnx文件"))
     {
-        const std::string selectedPath = chooseOnnxFile();
+        const std::filesystem::path selectedPath = chooseOnnxFile();
         if (!selectedPath.empty())
         {
             onnx_inspection_path = selectedPath;
@@ -294,9 +283,10 @@ void draw_performance_settings()
     if (onnx_inspection_running)
         ImGui::TextDisabled("解析中...");
 
-    ImGui::TextUnformatted(onnx_inspection_path.empty()
-        ? kOnnxInspectionPrompt
-        : onnx_inspection_path.c_str());
+    if (onnx_inspection_path.empty())
+        ImGui::TextUnformatted(kOnnxInspectionPrompt);
+    else
+        ImGui::TextUnformatted(onnx_inspection_path.u8string().c_str());
 
     if (onnx_inspection_running &&
         onnx_inspection_task.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
@@ -349,130 +339,96 @@ void draw_capture_general_settings()
 {
     ImGui::PushID("capture_section_general");
         ImGui::BeginGroup();
-        const ImGuiStyle& style = ImGui::GetStyle();
         {
-            static constexpr int kDetectionResolutions[] = {
-                160, 192, 224, 256, 288, 320, 352, 384,
-                416, 448, 480, 512, 544, 576, 608, 640
-            };
-            static constexpr const char* kDetectionResolutionLabels[] = {
-                "160", "192", "224", "256", "288", "320", "352", "384",
-                "416", "448", "480", "512", "544", "576", "608", "640"
-            };
-            int selectedDetectionResolution = 0;
-            for (int i = 0; i < IM_ARRAYSIZE(kDetectionResolutions); ++i)
-            {
-                if (kDetectionResolutions[i] == config.detection_resolution)
-                {
-                    selectedDetectionResolution = i;
-                    break;
-                }
-            }
-            ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
-            const bool detectionResolutionChanged = ImGui::Combo(
-                "##detection_resolution", &selectedDetectionResolution,
-                kDetectionResolutionLabels, IM_ARRAYSIZE(kDetectionResolutionLabels));
-            if (detectionResolutionChanged)
-                config.detection_resolution = kDetectionResolutions[selectedDetectionResolution];
-            ImGui::SameLine();
-            ImGui::TextDisabled("模型分辨率 [160, 640]");
+            const StartupOnnxReport& report = startupOnnxReport();
+            const int modelW = (report.width > 0) ? report.width : config.model_input_width;
+            const int modelH = (report.height > 0) ? report.height : config.model_input_height;
+            const int displayW = (modelW > 0) ? modelW : config.detection_resolution;
+            const int displayH = (modelH > 0) ? modelH : displayW;
+            ImGui::Text("程序已自动应用模型的输入尺寸:%dx%d", displayW, displayH);
             ShowSettingTooltip("模型分辨率");
-            if (detectionResolutionChanged)
+
+            bool modelResolutionChanged = false;
+            bool forceChanged = ImGui::Checkbox("强制指定模型输入尺寸", &config.force_model_input_size);
+            int forceWidth = config.force_model_input_width;
+            int forceHeight = config.force_model_input_height;
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(30.0f);
+            if (ImGui::InputInt("##force_model_width", &forceWidth, 0, 0,
+                    ImGuiInputTextFlags_CharsDecimal))
+                modelResolutionChanged = true;
+            ImGui::SameLine();
+            ImGui::TextUnformatted("×");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(30.0f);
+            if (ImGui::InputInt("##force_model_height", &forceHeight, 0, 0,
+                    ImGuiInputTextFlags_CharsDecimal))
+                modelResolutionChanged = true;
+            ImGui::SameLine();
+            ImGui::TextDisabled("强制分辨率 [32, 1024] 按 32 对齐");
+
+            const bool runtimeModelChanged = forceChanged
+                || (config.force_model_input_size && modelResolutionChanged);
+            if (forceChanged || modelResolutionChanged)
             {
+                Config::normalizeModelInputSize(forceWidth, forceHeight);
+                config.force_model_input_width = forceWidth;
+                config.force_model_input_height = forceHeight;
+                config.model_input_width = displayW;
+                config.model_input_height = displayH;
+                OverlayConfig_MarkDirty();
+            }
+            if (runtimeModelChanged)
+            {
+                const int effectiveW = config.force_model_input_size ? forceWidth : displayW;
+                if (effectiveW > 0)
+                    config.detection_resolution = effectiveW;
                 detection_resolution_changed.store(true);
                 detector_model_changed.store(true);
-
                 globalMouseThread->updateConfig(
                     config.detection_resolution,
-                    config.fovX,
-                    config.fovY,
-                    config.minSpeedMultiplier,
-                    config.maxSpeedMultiplier,
                     config.predictionInterval,
                     config.auto_shoot,
                     config.bScope_multiplier);
-                OverlayConfig_MarkDirty();
             }
+
         }
 
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         bool captureFpsChanged = ImGui::InputInt("##capture_fps", &config.capture_fps, 0, 0, ImGuiInputTextFlags_CharsDecimal);
         ImGui::SameLine(); if (ImGui::Button("-##capture_fps")) { --config.capture_fps; captureFpsChanged = true; }
         ImGui::SameLine(); if (ImGui::Button("+##capture_fps")) { ++config.capture_fps; captureFpsChanged = true; }
-        ImGui::SameLine(); ImGui::TextDisabled("采集帧率 [1, 240]");
+        ImGui::SameLine(); ImGui::TextDisabled("采集帧率 [1, 500]");
         ShowSettingTooltip("采集帧率");
         if (captureFpsChanged)
         {
             capture_fps_changed.store(true);
             OverlayConfig_MarkDirty();
         }
-        ValidateIntParam(&config.capture_fps, 1, 240, 60);
+        ValidateIntParam(&config.capture_fps, 1, 500, 60);
 
         if (config.capture_fps >= 241)
         {
             ImGui::TextDisabled("警告：高帧率可能降低性能。");
         }
 
+        config.circle_fov_enabled = true;
+
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
+        bool circleFovChanged = ImGui::InputInt("##circle_fov", &config.circle_fov_radius_percent, 0, 0, ImGuiInputTextFlags_CharsDecimal);
+        ImGui::SameLine(); if (ImGui::Button("-##circle_fov")) { --config.circle_fov_radius_percent; circleFovChanged = true; }
+        ImGui::SameLine(); if (ImGui::Button("+##circle_fov")) { ++config.circle_fov_radius_percent; circleFovChanged = true; }
+        ImGui::SameLine(); ImGui::TextDisabled("圆形视野大小 [1, 100]");
+        ShowSettingTooltip("圆形视野");
+        if (circleFovChanged)
         {
-            if (ImGui::Checkbox("圆形视野", &config.circle_fov_enabled))
-            {
-                OverlayConfig_MarkDirty();
-            }
+            OverlayConfig_MarkDirty();
         }
-        ImGui::EndGroup();
-
-        if (config.circle_fov_enabled)
-        {
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
-            bool circleFovChanged = ImGui::InputInt("##circle_fov", &config.circle_fov_radius_percent, 0, 0, ImGuiInputTextFlags_CharsDecimal);
-            ImGui::SameLine(); if (ImGui::Button("-##circle_fov")) { --config.circle_fov_radius_percent; circleFovChanged = true; }
-            ImGui::SameLine(); if (ImGui::Button("+##circle_fov")) { ++config.circle_fov_radius_percent; circleFovChanged = true; }
-            ImGui::SameLine(); ImGui::TextDisabled("圆形视野大小 [1, 100]");
-            if (circleFovChanged)
-            {
-                OverlayConfig_MarkDirty();
-            }
-            ValidateIntParam(&config.circle_fov_radius_percent, 1, 100, 100);
-        }
-
-        ImGui::BeginGroup();
-
-#ifdef USE_CUDA
-        if (config.backend == "TRT")
-        {
-            const bool cudaCaptureAvailable = (config.capture_method == "duplication_api");
-            if (!cudaCaptureAvailable)
-            {
-                ImGui::BeginDisabled();
-            }
-
-            {
-#ifdef USE_CUDA
-                bool captureUseCuda = config.capture_use_cuda;
-                if (ImGui::Checkbox("##cuda_capture", &captureUseCuda))
-                {
-                    config.capture_use_cuda = captureUseCuda;
-                    OverlayConfig_MarkDirty();
-                }
-#else
-                ImGui::Checkbox("##value", false);
-#endif
-                ImGui::SameLine();
-                ImGui::TextUnformatted("CUDA 加速捕获");
-            }
-
-            if (!cudaCaptureAvailable)
-            {
-                ImGui::EndDisabled();
-                ImGui::TextDisabled("仅在DXGI模式下可用。");
-            }
-        }
-#endif
+        ValidateIntParam(&config.circle_fov_radius_percent, 1, 100, 100);
 
         std::vector<std::string> captureMethodOptions = { "duplication_api", "winrt", "virtual_camera", "udp_capture" };
         std::vector<std::string> captureMethodDisplayNames = { "DXGI", "WinRT", "采集卡", "UDP推流" };
         std::vector<const char*> captureMethodItems;
-
         for (const auto& name : captureMethodDisplayNames)
         {
             captureMethodItems.push_back(name.c_str());
@@ -489,7 +445,7 @@ void draw_capture_general_settings()
         }
 
         {
-            ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             if (ImGui::Combo("##capture_method", &currentcaptureMethodIndex, captureMethodItems.data(), static_cast<int>(captureMethodItems.size())))
             {
                 config.capture_method = captureMethodOptions[currentcaptureMethodIndex];
@@ -507,6 +463,48 @@ void draw_capture_general_settings()
             ImGui::SameLine();
             ImGui::TextUnformatted("捕获方式");
         }
+
+        ImGui::EndGroup();
+
+        draw_capture_source_settings();
+
+        ImGui::BeginGroup();
+
+#ifdef USE_CUDA
+        if (config.backend == "TRT")
+        {
+            const bool cudaCaptureAvailable = (config.capture_method == "duplication_api");
+            if (!cudaCaptureAvailable)
+            {
+                ImGui::BeginDisabled();
+            }
+
+            {
+                bool captureUseCuda = config.capture_use_cuda;
+                if (ImGui::Checkbox("##cuda_capture", &captureUseCuda))
+                {
+                    config.capture_use_cuda = captureUseCuda;
+                    OverlayConfig_MarkDirty();
+                    capture_method_changed.store(true);
+                }
+                ImGui::SameLine();
+                ImGui::TextUnformatted("CUDA 加速捕获");
+            }
+
+            if (ImGui::Checkbox("详细控制台输出", &config.verbose))
+            {
+                OverlayConfig_MarkDirty();
+            }
+
+            if (!cudaCaptureAvailable)
+            {
+                ImGui::EndDisabled();
+                ImGui::TextDisabled("仅在DXGI模式下可用。");
+            }
+        }
+#endif
+
+
         ImGui::EndGroup();
     ImGui::PopID();
 
@@ -526,7 +524,7 @@ void draw_capture_source_settings()
                 {
                     ImGui::TextUnformatted("捕获目标(WinRT)");
                     ImGui::SameLine();
-                    ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
+                    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                     if (ImGui::Combo("##winrt_capture_target", &currentTargetIndex,
                         [](void* data, int idx) -> const char* {
                             const auto* v = static_cast<const std::vector<std::string>*>(data);
@@ -549,7 +547,7 @@ void draw_capture_source_settings()
                 {
                     ImGui::TextUnformatted("窗口过滤");
                     ImGui::SameLine();
-                    ImGui::SetNextItemWidth(UiLayout::kTextMediumWidth);
+                    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                     ImGui::InputText("##winrt_window_filter", capture_window_filter_buf, IM_ARRAYSIZE(capture_window_filter_buf));
                 }
 
@@ -571,7 +569,7 @@ void draw_capture_source_settings()
 
                     ImGui::TextUnformatted("窗口");
                     ImGui::SameLine();
-                    ImGui::SetNextItemWidth(UiLayout::kComboLongWidth);
+                    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                     if (ImGui::BeginCombo("##winrt_window_pick", preview.c_str()))
                     {
                         for (int index : filteredWindowIndices)
@@ -638,7 +636,6 @@ void draw_capture_source_settings()
     if (config.capture_method == "duplication_api" || (config.capture_method == "winrt" && config.capture_target != "window"))
     {
         ImGui::PushID("capture_section_monitor");
-        ImGui::SeparatorText("显示器捕获");
             std::vector<std::string> monitorNames;
             int monitorCount = monitors;
             if (monitorCount <= 0)
@@ -662,14 +659,16 @@ void draw_capture_source_settings()
 
             int selectedMonitor = std::clamp(config.monitor_idx, 0, monitorCount - 1);
                 {
-                    ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
-                    if (ImGui::Combo("##value", &selectedMonitor, monitorItems.data(), static_cast<int>(monitorItems.size())))
+                    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
+                    if (ImGui::Combo("##capture_monitor_select", &selectedMonitor, monitorItems.data(), static_cast<int>(monitorItems.size())))
                 {
                     config.monitor_idx = selectedMonitor;
                     OverlayConfig_MarkDirty();
                     capture_method_changed.store(true);
                 }
             }
+            ImGui::SameLine();
+            ImGui::TextDisabled("显示器");
 
         ImGui::PopID();
     }
@@ -683,7 +682,7 @@ void draw_capture_source_settings()
             {
                 ImGui::TextUnformatted("过滤");
                 ImGui::SameLine();
-                ImGui::SetNextItemWidth(UiLayout::kTextMediumWidth);
+                ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                 // 修复：与下方采集卡 Combo 原本共用 "##value" 导致 ID 冲突。
                 ImGui::InputText("##vcam_filter", virtual_camera_filter_buf, IM_ARRAYSIZE(virtual_camera_filter_buf));
             }
@@ -722,7 +721,7 @@ void draw_capture_source_settings()
                 {
                     ImGui::TextUnformatted("采集卡");
                     ImGui::SameLine();
-                    ImGui::SetNextItemWidth(UiLayout::kComboLongWidth);
+                    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                     if (ImGui::Combo("##vcam_device", &currentIndex, items.data(), static_cast<int>(items.size())))
                     {
                         config.virtual_camera_name = virtual_cameras[filtered_indices[currentIndex]];
@@ -748,7 +747,7 @@ void draw_capture_source_settings()
             }
 
             ImGui::BeginGroup();
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             bool virtualCameraWidthChanged = ImGui::InputInt("##virtual_camera_width", &config.virtual_camera_width, 0, 0, ImGuiInputTextFlags_CharsDecimal);
             ImGui::SameLine(); if (ImGui::Button("-##virtual_camera_width")) { --config.virtual_camera_width; virtualCameraWidthChanged = true; }
             ImGui::SameLine(); if (ImGui::Button("+##virtual_camera_width")) { ++config.virtual_camera_width; virtualCameraWidthChanged = true; }
@@ -758,7 +757,7 @@ void draw_capture_source_settings()
                 OverlayConfig_MarkDirty();
                 virtual_camera_settings_pending = true;
             }
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             bool virtualCameraHeightChanged = ImGui::InputInt("##virtual_camera_height", &config.virtual_camera_heigth, 0, 0, ImGuiInputTextFlags_CharsDecimal);
             ImGui::SameLine(); if (ImGui::Button("-##virtual_camera_height")) { --config.virtual_camera_heigth; virtualCameraHeightChanged = true; }
             ImGui::SameLine(); if (ImGui::Button("+##virtual_camera_height")) { ++config.virtual_camera_heigth; virtualCameraHeightChanged = true; }
@@ -770,14 +769,14 @@ void draw_capture_source_settings()
             }
             ValidateIntParam(&config.virtual_camera_width, 1, 7680, 1920);
             ValidateIntParam(&config.virtual_camera_heigth, 1, 4320, 1080);
-            ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+            ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
             bool virtualCameraFpsChanged = ImGui::InputInt("##virtual_camera_fps", &config.virtual_camera_fps, 0, 0, ImGuiInputTextFlags_CharsDecimal);
             ImGui::SameLine(); if (ImGui::Button("-##virtual_camera_fps")) { --config.virtual_camera_fps; virtualCameraFpsChanged = true; }
             ImGui::SameLine(); if (ImGui::Button("+##virtual_camera_fps")) { ++config.virtual_camera_fps; virtualCameraFpsChanged = true; }
-            ImGui::SameLine(); ImGui::TextDisabled("采集卡帧率 [1, 240]");
+            ImGui::SameLine(); ImGui::TextDisabled("采集卡帧率 [1, 500]");
             if (virtualCameraFpsChanged)
             {
-                config.virtual_camera_fps = std::clamp(config.virtual_camera_fps, 1, 240);
+                config.virtual_camera_fps = std::clamp(config.virtual_camera_fps, 1, 500);
                 OverlayConfig_MarkDirty();
                 virtual_camera_settings_pending = true;
             }
@@ -821,11 +820,11 @@ void draw_capture_source_settings()
             {
                 ImGui::TextUnformatted("UDP IP地址（0.0.0.0 = 任意来源）");
                 ImGui::SameLine();
-                ImGui::SetNextItemWidth(UiLayout::kTextShortWidth);
+                ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                 ImGui::InputText("##value", udp_ip_buf, IM_ARRAYSIZE(udp_ip_buf));
             }
             {
-                ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+                ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
                 ImGui::InputInt("##udp_port", &udp_port_buf, 0, 0, ImGuiInputTextFlags_CharsDecimal);
                 ImGui::SameLine();
                 if (ImGui::Button("-##udp_port", ImVec2(udpPortButtonWidth, 0.0f)))

@@ -39,6 +39,8 @@ public:
     int getNumClasses() const { return numClasses; }
 
     float img_scale;
+    int modelInputWidth = -1;  // 引擎实际输入宽，由 initialize() 写入
+    int modelInputHeight = -1; // 引擎实际输入高，由 initialize() 写入
 
     std::vector<std::string> inputNames;
     std::vector<std::string> outputNames;

@@ -109,6 +109,26 @@ static std::filesystem::path ModelPath(const std::string& modelName)
     return (ModelsDirectory() / std::filesystem::path(modelName).filename()).lexically_normal();
 }
 
+static void ApplyModelInputResolution(int modelWidth, int modelHeight)
+{
+    if (modelWidth <= 0 || modelHeight <= 0)
+        return;
+
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        config.model_input_width = modelWidth;
+        config.model_input_height = modelHeight;
+
+        int forceWidth = config.force_model_input_width;
+        int forceHeight = config.force_model_input_height;
+        const bool forceValid = config.force_model_input_size
+            && Config::normalizeModelInputSize(forceWidth, forceHeight);
+        config.detection_resolution = forceValid ? forceWidth : modelWidth;
+    }
+
+    detection_resolution_changed.store(true);
+}
+
 static bool SelectCompatibleAiModel()
 {
     std::vector<std::string> availableModels = getAvailableModels();
@@ -494,6 +514,7 @@ int main(int argc, char** argv)
         StartupOnnxReport startupReport = inspectLoadedEngineOnnx(
             selectedModelPath.string(), config.detection_resolution);
         publishStartupOnnxReport(startupReport);
+        ApplyModelInputResolution(startupReport.width, startupReport.height);
         if (startupReport.success)
             std::cout << startupReport.text << std::endl;
 
@@ -501,10 +522,6 @@ int main(int argc, char** argv)
 
         MouseThread mouseThread(
             config.detection_resolution,
-            config.fovX,
-            config.fovY,
-            config.minSpeedMultiplier,
-            config.maxSpeedMultiplier,
             config.predictionInterval,
             config.auto_shoot,
             config.bScope_multiplier,

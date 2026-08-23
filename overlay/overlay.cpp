@@ -29,6 +29,7 @@
 #include "overlay/ui_sections.h"
 #include "overlay/draw_settings.h"
 #include "overlay/config_dirty.h"
+#include "overlay/preview_window.h"
 #include "include/other_tools.h"
 #include "config.h"
 #include "keycodes.h"
@@ -233,8 +234,6 @@ static void draw_program_config_page()
 {
     draw_global_ai_settings();
     draw_ai();
-    draw_mouse_profiles();
-    draw_mouse_assist();
     draw_buttons();
     draw_overlay();
 }
@@ -1287,6 +1286,13 @@ void OverlayThread()
         }
         overlayHotkeyWasDown = overlayHotkeyDown;
 
+        bool previewEnabled = false;
+        {
+            std::lock_guard<std::mutex> lock(configMutex);
+            previewEnabled = config.show_window;
+        }
+        PreviewWindow::UpdateAndRender(previewEnabled, g_pd3dDevice, g_pd3dDeviceContext);
+
         if (!show_overlay)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -1329,6 +1335,8 @@ void OverlayThread()
         std::lock_guard<std::mutex> lock(configMutex);
         OverlayConfig_SaveNow();
     }
+
+    PreviewWindow::Shutdown();
 
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();

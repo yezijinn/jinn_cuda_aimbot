@@ -328,6 +328,7 @@ set(AIMBOT_SOURCES
     "${SRC_DIR}/overlay/onnx_donor/JsonWriter.cpp"
     "${SRC_DIR}/overlay/config_dirty.cpp"
     "${SRC_DIR}/overlay/draw_debug.cpp"
+    "${SRC_DIR}/overlay/preview_window.cpp"
     
     "${SRC_DIR}/overlay/draw_mouse.cpp"
     "${SRC_DIR}/overlay/draw_overlay.cpp"

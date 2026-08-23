@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <cctype>
 #include <cstring>
+#include <array>
 
 #include "dml_detector.h"
 #include "mybot.h"
@@ -25,6 +26,7 @@
 #include "capture/circle_fov.h"
 #include "other_tools.h"
 #include "config.h"
+#include "mouse/AimbotTarget.h"
 
 extern std::atomic<bool> detector_model_changed;
 extern std::atomic<bool> detection_resolution_changed;
@@ -884,22 +886,42 @@ void DirectMLDetector::dmlInferenceThread()
                     continue;
                 }
                 const std::vector<Detection>& detections = detectionsBatch.back();
-                 std::vector<Detection> filteredDetections = detections;
-                 filterDetectionsByCircleFov(filteredDetections);
-                 const int activeClassSlot = active_mouse_hotkey_slot.load(std::memory_order_relaxed);
-                 const Config::MouseHotkey* activeClassProfile =
-                     activeClassSlot >= 0 && activeClassSlot < static_cast<int>(Config::MAX_MOUSE_HOTKEYS)
-                         ? &config.mouse_hotkeys[static_cast<std::size_t>(activeClassSlot)] : nullptr;
-                 filteredDetections.erase(
-                     std::remove_if(filteredDetections.begin(), filteredDetections.end(),
-                         [activeClassProfile](const Detection& detection) {
-                             if (!config.isClassEnabled(detection.classId))
-                                 return true;
-                             return activeClassProfile != nullptr &&
-                                 !activeClassProfile->localBool(
-            "class_enabled_" + std::to_string(detection.classId), false);
-                         }),
-                     filteredDetections.end());
+                std::vector<Detection> filteredDetections = detections;
+                {
+                    std::lock_guard<std::mutex> lock(configMutex);
+                    filterDetectionsByCircleFov(filteredDetections);
+                }
+
+                // 与 TRT 路径一致：类别开关在锁内做一次定长快照，避免 per-detection 字符串
+                // 拼接、unordered_map 遍历与 overlay 线程 setLocalBool 并发导致数据竞争。
+                std::array<unsigned char, static_cast<std::size_t>(Config::FIXED_TARGET_CLASS_COUNT)> classAllowed{};
+                std::string aiModelSnapshot;
+                {
+                    std::lock_guard<std::mutex> lock(configMutex);
+                    const int activeClassSlot = active_mouse_hotkey_slot.load(std::memory_order_relaxed);
+                    const Config::MouseHotkey* activeClassProfile =
+                        activeClassSlot >= 0 && activeClassSlot < static_cast<int>(Config::MAX_MOUSE_HOTKEYS)
+                            ? &config.mouse_hotkeys[static_cast<std::size_t>(activeClassSlot)] : nullptr;
+                    for (int cls = 0; cls < Config::FIXED_TARGET_CLASS_COUNT; ++cls)
+                    {
+                        bool allowed = config.isClassEnabled(cls);
+                        if (allowed && activeClassProfile != nullptr)
+                        {
+                            allowed = activeClassProfile->localBool(
+                                targetClassConfigKeys().enabled[static_cast<std::size_t>(cls)], false);
+                        }
+                        classAllowed[static_cast<std::size_t>(cls)] = allowed ? 1u : 0u;
+                    }
+                    aiModelSnapshot = config.ai_model;
+                }
+                filteredDetections.erase(
+                    std::remove_if(filteredDetections.begin(), filteredDetections.end(),
+                        [&classAllowed](const Detection& detection) {
+                            if (detection.classId < 0 || detection.classId >= Config::FIXED_TARGET_CLASS_COUNT)
+                                return true;
+                            return classAllowed[static_cast<std::size_t>(detection.classId)] == 0u;
+                        }),
+                    filteredDetections.end());
 
                 std::vector<cv::Rect> boxes;
                 std::vector<int> classes;
@@ -919,7 +941,7 @@ void DirectMLDetector::dmlInferenceThread()
                 const cv::Mat& frameForCollection = sourceFrame.empty() ? frame : sourceFrame;
                 cvm::MaybeCollectDataSample(
                     "",
-                    config.ai_model.c_str(),
+                    aiModelSnapshot.c_str(),
                     frameForCollection,
                     boxes,
                     classes,

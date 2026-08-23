@@ -227,6 +227,35 @@ if (drawTimingSummary)
         sourceSizeLabel = "流尺寸";
     }
 
+    auto drawMovedPerformanceSummary = [&]() {
+        ImGui::SeparatorText(captureUsesMonitorRefresh ? "显示器捕获" : "采集源");
+        if (captureUsesMonitorRefresh)
+            ImGui::Text("显示器 %d", std::max(0, config.monitor_idx) + 1);
+        else
+            ImGui::TextUnformatted(captureSource.c_str());
+
+        const float avgInferenceFps =
+            avg_inference_cached > 0.0f ? 1000.0f / avg_inference_cached : 0.0f;
+
+        ImGui::Text("可承载的推理帧率上限: %.1f FPS", avgInferenceFps);
+        ImGui::Text("预处理 %.2f ms / 平均 %.2f ms", current_preprocess, avg_preprocess_cached);
+        ImGui::Text("内存拷贝 %.2f ms / 平均 %.2f ms", current_copy, avg_copy_cached);
+        ImGui::Text("后处理 %.2f ms / 平均 %.2f ms", current_post, avg_post_cached);
+
+#ifdef USE_CUDA
+        ImGui::Text(
+            "NMS %.2f ms / 平均 %.2f ms | 数量：限制前 %u，NMS 前 %u，NMS 后 %u",
+            current_nms,
+            avg_nms_cached,
+            preLimitCount,
+            preNmsCount,
+            postNmsCount
+        );
+#else
+        ImGui::Text("NMS %.2f ms / 平均 %.2f ms", current_nms, avg_nms_cached);
+#endif
+    };
+
     ImGui::PushID("stats_section_capture_details");
         const std::string captureMethodBackend = "方式: " + config.capture_method + " | 后端: " + config.backend;
         if (ImGui::CalcTextSize(captureMethodBackend.c_str()).x <= ImGui::GetContentRegionAvail().x)
@@ -314,20 +343,20 @@ if (drawTimingSummary)
             char frameTimeAndFov[160] = {};
             std::snprintf(frameTimeAndFov, sizeof(frameTimeAndFov),
                 "帧时间: 当前 %.2f ms | 平均 %.2f ms | 圆形视野: %s", currentFrameTimeMs, avgFrameTimeMs,
-                config.circle_fov_enabled ? "开" : "关");
+                "开");
             if (ImGui::CalcTextSize(frameTimeAndFov).x <= ImGui::GetContentRegionAvail().x)
                 ImGui::Text("帧时间: 当前 %.2f ms | 平均 %.2f ms | 圆形视野: %s", currentFrameTimeMs,
-                    avgFrameTimeMs, config.circle_fov_enabled ? "开" : "关");
+                    avgFrameTimeMs, "开");
             else
             {
                 ImGui::Text("帧时间: 当前 %.2f ms | 平均 %.2f ms", currentFrameTimeMs, avgFrameTimeMs);
-                ImGui::Text("圆形视野: %s", config.circle_fov_enabled ? "开" : "关");
+                ImGui::Text("圆形视野: 开");
             }
         }
         else
         {
             ImGui::TextDisabled("帧时间: 无");
-            ImGui::Text("圆形视野: %s", config.circle_fov_enabled ? "开" : "关");
+            ImGui::Text("圆形视野: 开");
         }
 
 #ifdef USE_CUDA
@@ -429,6 +458,7 @@ if (drawTimingSummary)
 #ifdef USE_CUDA
         if (config.backend == "TRT")
         {
+            drawMovedPerformanceSummary();
             ImGui::Separator();
             ImGui::Text("CUDA直接捕获: %s", config.capture_use_cuda ? "已启用" : "已禁用");
 
@@ -537,4 +567,36 @@ void draw_stats_summary()
 void draw_stats()
 {
     draw_stats_content(false, true);
+}
+
+void draw_inference_capacity_line()
+{
+    float currentInferenceMs = 0.0f;
+#ifdef USE_CUDA
+    if (trt_detector)
+        currentInferenceMs = static_cast<float>(trt_detector->lastInferenceTimeMs.load(std::memory_order_relaxed));
+#else
+    if (dml_detector)
+        currentInferenceMs = static_cast<float>(dml_detector->lastInferenceTimeMs.load(std::memory_order_relaxed));
+#endif
+
+    static float capacityInferenceTimes[120] = {};
+    static int capacityIndex = 0;
+    capacityInferenceTimes[capacityIndex] = currentInferenceMs;
+    capacityIndex = (capacityIndex + 1) % IM_ARRAYSIZE(capacityInferenceTimes);
+
+    float sum = 0.0f;
+    int count = 0;
+    for (float sample : capacityInferenceTimes)
+    {
+        if (sample > 0.0f)
+        {
+            sum += sample;
+            ++count;
+        }
+    }
+
+    const float avgInferenceMs = count > 0 ? sum / static_cast<float>(count) : 0.0f;
+    const float fps = avgInferenceMs > 0.0f ? 1000.0f / avgInferenceMs : 0.0f;
+    ImGui::Text("可承载的推理帧率上限: %.1f FPS", fps);
 }

@@ -66,10 +66,6 @@ int toMoveCount(double value)
 
 MouseThread::MouseThread(
     int resolution,
-    int fovX,
-    int fovY,
-    double minSpeedMultiplier,
-    double maxSpeedMultiplier,
     double predictionInterval,
     bool auto_shoot,
     float bScope_multiplier,
@@ -77,11 +73,7 @@ MouseThread::MouseThread(
     : screen_width(resolution),
     screen_height(resolution),
     prediction_interval(predictionInterval),
-    fov_x(fovX),
-    fov_y(fovY),
     max_distance(std::hypot(resolution, resolution) / 2.0),
-    min_speed_multiplier(minSpeedMultiplier),
-    max_speed_multiplier(maxSpeedMultiplier),
     center_x(resolution / 2.0),
     center_y(resolution / 2.0),
     auto_shoot(auto_shoot),
@@ -111,8 +103,8 @@ MouseThread::MouseThread(
     nearRadius = profile ? profile->localFloat("nearRadius", config.nearRadius) : static_cast<float>(config.nearRadius);
     speedCurveExponent = profile ? profile->localFloat("speedCurveExponent", config.speedCurveExponent) : config.speedCurveExponent;
     snapBoostFactor = profile ? profile->localFloat("snapBoostFactor", config.snapBoostFactor) : config.snapBoostFactor;
-    profileMinSpeedMultiplier = profile ? profile->localFloat("minSpeedMultiplier", static_cast<float>(min_speed_multiplier)) : static_cast<float>(min_speed_multiplier);
-    profileMaxSpeedMultiplier = profile ? profile->localFloat("maxSpeedMultiplier", static_cast<float>(max_speed_multiplier)) : static_cast<float>(max_speed_multiplier);
+    profileMinSpeedMultiplier = profile ? profile->localFloat("minSpeedMultiplier", 0.1f) : 0.1f;
+    profileMaxSpeedMultiplier = profile ? profile->localFloat("maxSpeedMultiplier", 0.1f) : 0.1f;
     }
     resetCurveState();
     clearCurveDebugTrail();
@@ -130,10 +122,6 @@ MouseThread::MouseThread(
 
 void MouseThread::updateConfig(
     int resolution,
-    int fovX,
-    int fovY,
-    double minSpeedMultiplier,
-    double maxSpeedMultiplier,
     double predictionInterval,
     bool auto_shoot,
     float bScope_multiplier
@@ -153,10 +141,6 @@ void MouseThread::updateConfig(
     // 故改为暂存快照，由鼠标线程在持有 input_method_mutex 时应用。
     PendingConfig staged;
     staged.resolution = resolution;
-    staged.fovX = fovX;
-    staged.fovY = fovY;
-    staged.minSpeedMultiplier = minSpeedMultiplier;
-    staged.maxSpeedMultiplier = maxSpeedMultiplier;
     staged.predictionInterval = predictionInterval;
     staged.autoShoot = auto_shoot;
     staged.bScopeMultiplier = bScope_multiplier;
@@ -168,7 +152,7 @@ void MouseThread::updateConfig(
     staged.kalmanSettings = buildKalmanSettingsFromConfigUnlocked();
     // ---- PendingConfig 新增字段填充 (mc_* / 预测 / 射击 / 速度曲线 profile) ----
     // 注: 调用方已持 configMutex，此处直读 config 安全。
-    staged.mcEnabled = config.mc_enabled;
+    staged.mcEnabled = true;
     staged.mcMaxStep = config.mc_maxstep;
     staged.mcRetarget = config.mc_retarget;
     staged.mcAheadMin = config.mc_ahead_min;  staged.mcAheadMax = config.mc_ahead_max;
@@ -180,6 +164,9 @@ void MouseThread::updateConfig(
     staged.mcYTracking = config.mc_y_tracking; staged.mcYDamping = config.mc_y_damping;
     staged.mcYMaxspeed = config.mc_y_maxspeed; staged.mcYIntegral = config.mc_y_integral;
     staged.mcYDeadzone = config.mc_y_deadzone;
+    staged.humanizerStyle = 0;
+    staged.humanizerOvershoot = 0.0f;
+    staged.humanizerPowerLaw = 0.0f;
     staged.kalmanCompensateDetectionDelay = config.kalman_compensate_detection_delay;
     staged.kalmanAdditionalPredictionMs = config.kalman_additional_prediction_ms;
     staged.kalmanResetTimeoutSec = config.kalman_reset_timeout_sec;
@@ -194,8 +181,29 @@ void MouseThread::updateConfig(
             staged.nearRadius = profile.localFloat("nearRadius", config.nearRadius);
             staged.speedCurveExponent = profile.localFloat("speedCurveExponent", config.speedCurveExponent);
             staged.snapBoostFactor = profile.localFloat("snapBoostFactor", config.snapBoostFactor);
-            staged.profileMinSpeedMultiplier = profile.localFloat("minSpeedMultiplier", static_cast<float>(staged.minSpeedMultiplier));
-            staged.profileMaxSpeedMultiplier = profile.localFloat("maxSpeedMultiplier", static_cast<float>(staged.maxSpeedMultiplier));
+            staged.profileMinSpeedMultiplier = profile.localFloat("minSpeedMultiplier", 0.1f);
+            staged.profileMaxSpeedMultiplier = profile.localFloat("maxSpeedMultiplier", 0.1f);
+            staged.mcMaxStep = profile.localFloat("maxstep", config.mc_maxstep);
+            staged.mcRetarget = profile.localFloat("retarget", config.mc_retarget);
+            staged.mcAheadMin = profile.localFloat("ahead_min", config.mc_ahead_min);
+            staged.mcAheadMax = profile.localFloat("ahead_max", config.mc_ahead_max);
+            staged.mcDurMin = profile.localFloat("dur_min", config.mc_dur_min);
+            staged.mcDurMax = profile.localFloat("dur_max", config.mc_dur_max);
+            staged.mcKalmanQ = profile.localFloat("kalman_q", config.mc_kalman_q);
+            staged.mcKalmanR = profile.localFloat("kalman_r", config.mc_kalman_r);
+            staged.mcXTracking = profile.localFloat("x_tracking", config.mc_x_tracking);
+            staged.mcXDamping = profile.localFloat("x_damping", config.mc_x_damping);
+            staged.mcXMaxspeed = profile.localFloat("x_maxspeed", config.mc_x_maxspeed);
+            staged.mcXIntegral = profile.localFloat("x_integral", config.mc_x_integral);
+            staged.mcXDeadzone = profile.localFloat("x_deadzone", config.mc_x_deadzone);
+            staged.mcYTracking = profile.localFloat("y_tracking", config.mc_y_tracking);
+            staged.mcYDamping = profile.localFloat("y_damping", config.mc_y_damping);
+            staged.mcYMaxspeed = profile.localFloat("y_maxspeed", config.mc_y_maxspeed);
+            staged.mcYIntegral = profile.localFloat("y_integral", config.mc_y_integral);
+            staged.mcYDeadzone = profile.localFloat("y_deadzone", config.mc_y_deadzone);
+            staged.humanizerStyle = profile.localInt("humanizer_style", 0);
+            staged.humanizerOvershoot = profile.localFloat("humanizer_overshoot", 0.0f);
+            staged.humanizerPowerLaw = profile.localFloat("humanizer_power_law", 0.0f);
         }
         else
         {
@@ -203,8 +211,8 @@ void MouseThread::updateConfig(
             staged.nearRadius = config.nearRadius;
             staged.speedCurveExponent = config.speedCurveExponent;
             staged.snapBoostFactor = config.snapBoostFactor;
-            staged.profileMinSpeedMultiplier = static_cast<float>(staged.minSpeedMultiplier);
-            staged.profileMaxSpeedMultiplier = static_cast<float>(staged.maxSpeedMultiplier);
+            staged.profileMinSpeedMultiplier = 0.1f;
+            staged.profileMaxSpeedMultiplier = 0.1f;
         }
     }
 
@@ -236,9 +244,6 @@ void MouseThread::applyPendingConfigLocked()
 
     // 以下写入序列与原 updateConfig 完全一致，仅执行线程改为鼠标线程。
     screen_width = screen_height = staged.resolution;
-    fov_x = staged.fovX;  fov_y = staged.fovY;
-    min_speed_multiplier = staged.minSpeedMultiplier;
-    max_speed_multiplier = staged.maxSpeedMultiplier;
     prediction_interval = staged.predictionInterval;
     auto_shoot = staged.autoShoot;
     bScope_multiplier = staged.bScopeMultiplier;
@@ -283,6 +288,14 @@ void MouseThread::applyPendingConfigLocked()
         m_mc.enableAdaptiveDuration(true, staged.mcDurMin, staged.mcDurMax, 2500.0f);
         m_mc.tracker().setProcessNoise(staged.mcKalmanQ);
         m_mc.tracker().setMeasurementNoise(staged.mcKalmanR);
+        m_mc.setHumanization(staged.humanizerStyle);
+        HumanizerSettings hs = m_mc.humanizer().settings();
+        // 自定义末尾子动作幅度只在用户明确填写时覆盖风格内置过冲，
+        // 避免切换拟人风格后仍残留上一档的 overshoot。
+        if (staged.humanizerOvershoot > 0.0f)
+            hs.overshoot = std::clamp(staged.humanizerOvershoot, 0.0f, 10.0f);
+        hs.powerLaw  = std::clamp(staged.humanizerPowerLaw, 0.0f, 1.0f);
+        m_mc.setHumanizerSettings(hs);
     }
 }
 
@@ -539,42 +552,7 @@ void MouseThread::pruneCurveDebugTrailLocked(const std::chrono::steady_clock::ti
 
 std::pair<double, double> MouseThread::mouseCountsToScreenPixels(int dx, int dy) const
 {
-    double deltaPxX = static_cast<double>(dx);
-    double deltaPxY = static_cast<double>(dy);
-
-    {
-        std::lock_guard<std::mutex> cfgLock(configMutex);
-        const Config::GameProfile* gpPtr = nullptr;
-
-        auto activeIt = config.game_profiles.find(config.active_game);
-        if (activeIt != config.game_profiles.end())
-            gpPtr = &activeIt->second;
-        else
-        {
-            auto unifiedIt = config.game_profiles.find("UNIFIED");
-            if (unifiedIt != config.game_profiles.end())
-                gpPtr = &unifiedIt->second;
-        }
-
-        if (gpPtr && gpPtr->sens != 0.0 && gpPtr->yaw != 0.0 && gpPtr->pitch != 0.0)
-        {
-            const double fovNow = std::max(1.0, fov_x);
-            const double fovScale = (gpPtr->fovScaled && gpPtr->baseFOV > 1.0) ? (fovNow / gpPtr->baseFOV) : 1.0;
-            const double degX = static_cast<double>(dx) * gpPtr->sens * gpPtr->yaw * fovScale;
-            const double degY = static_cast<double>(dy) * gpPtr->sens * gpPtr->pitch * fovScale;
-
-            const double degPerPxX = fov_x / std::max(1.0, screen_width);
-            const double degPerPxY = fov_y / std::max(1.0, screen_height);
-
-            if (std::abs(degPerPxX) > 1e-8 && std::abs(degPerPxY) > 1e-8)
-            {
-                deltaPxX = degX / degPerPxX;
-                deltaPxY = degY / degPerPxY;
-            }
-        }
-    }
-
-    return { deltaPxX, deltaPxY };
+    return { static_cast<double>(dx), static_cast<double>(dy) };
 }
 
 void MouseThread::recordMotionCompensationStep(int dx, int dy)
@@ -762,22 +740,11 @@ std::pair<double, double> MouseThread::calc_movement(double tx, double ty)
     double dist = std::hypot(offx, offy);
     double speed = calculate_speed_multiplier(dist);
 
-    double degPerPxX = fov_x / screen_width;
-    double degPerPxY = fov_y / screen_height;
-
-    double mmx = offx * degPerPxX;
-    double mmy = offy * degPerPxY;
-
     double corr = 1.0;
     double fps = static_cast<double>(captureFps.load());
     if (fps > 30.0) corr = 30.0 / fps;
 
-    std::pair<double, double> counts_pair;
-    { std::lock_guard<std::mutex> lock(configMutex); counts_pair = config.degToCounts(mmx, mmy, fov_x); }
-    double move_x = counts_pair.first * speed * corr;
-    double move_y = counts_pair.second * speed * corr;
-
-    return { move_x, move_y };
+    return { offx * speed * corr, offy * speed * corr };
 }
 
 double MouseThread::calculate_speed_multiplier(double distance)
@@ -786,9 +753,9 @@ double MouseThread::calculate_speed_multiplier(double distance)
     // 调用方已持有 input_method_mutex 并调用 applyPendingConfigLocked()，
     // 此处直接使用成员变量，无需重复锁 configMutex。
     const double localMinSpeedMultiplier = profileMinSpeedMultiplier > 0.0
-        ? static_cast<double>(profileMinSpeedMultiplier) : min_speed_multiplier;
+        ? static_cast<double>(profileMinSpeedMultiplier) : 0.1;
     const double localMaxSpeedMultiplier = profileMaxSpeedMultiplier > 0.0
-        ? static_cast<double>(profileMaxSpeedMultiplier) : max_speed_multiplier;
+        ? static_cast<double>(profileMaxSpeedMultiplier) : 0.1;
 
     const double lowerSpeed = std::min(localMinSpeedMultiplier, localMaxSpeedMultiplier);
     const double upperSpeed = std::max(localMinSpeedMultiplier, localMaxSpeedMultiplier);
@@ -882,16 +849,10 @@ void MouseThread::moveMousePivot(
         float mvx = 0.0f, mvy = 0.0f;
         m_mc.getMoveDelta(mvx, mvy);
 
-        // 换回计数 (复用 degToCounts 换算链, 保持手感一致)
-        double degX = static_cast<double>(mvx) * (fov_x / screen_width);
-        double degY = static_cast<double>(mvy) * (fov_y / screen_height);
-        std::pair<double, double> counts;
-        {
-            std::lock_guard<std::mutex> lock(configMutex);
-            counts = config.degToCounts(degX, degY, fov_x);
-        }
-        int mx = toMoveCount(std::round(counts.first));
-        int my = toMoveCount(std::round(counts.second));
+        // 简化鼠标控制: MouseController 输出已按“检测分辨率像素”坐标系计算,
+        // 直接作为相对鼠标增量下发, 不再经过 FOV/灵敏度换算。
+        int mx = toMoveCount(std::round(static_cast<double>(mvx)));
+        int my = toMoveCount(std::round(static_cast<double>(mvy)));
 
         if (mx == 0 && my == 0)
             return;

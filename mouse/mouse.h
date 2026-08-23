@@ -33,11 +33,7 @@ private:
     double screen_width;
     double screen_height;
     double prediction_interval;
-    double fov_x;
-    double fov_y;
     double max_distance;
-    double min_speed_multiplier;
-    double max_speed_multiplier;
     double center_x;
     double center_y;
     bool   auto_shoot;
@@ -101,10 +97,6 @@ private:
     struct PendingConfig
     {
         int    resolution = 0;
-        int    fovX = 0;
-        int    fovY = 0;
-        double minSpeedMultiplier = 0.0;
-        double maxSpeedMultiplier = 0.0;
         double predictionInterval = 0.0;
         bool   autoShoot = false;
         float  bScopeMultiplier = 0.0f;
@@ -123,6 +115,10 @@ private:
         float  mcKalmanQ = 0.0f, mcKalmanR = 0.0f;
         float  mcXTracking = 0.0f, mcXDamping = 0.0f, mcXMaxspeed = 0.0f, mcXIntegral = 0.0f, mcXDeadzone = 0.0f;
         float  mcYTracking = 0.0f, mcYDamping = 0.0f, mcYMaxspeed = 0.0f, mcYIntegral = 0.0f, mcYDeadzone = 0.0f;
+        // 人手模拟可选增强 (热键专属, 默认关闭)
+        int    humanizerStyle = 0;
+        float  humanizerOvershoot = 0.0f;
+        float  humanizerPowerLaw = 0.0f;
         // 预测参数快照
         bool   kalmanCompensateDetectionDelay = false;
         float  kalmanAdditionalPredictionMs = 0.0f;
@@ -212,10 +208,6 @@ public:
 
     MouseThread(
         int  resolution,
-        int  fovX,
-        int  fovY,
-        double minSpeedMultiplier,
-        double maxSpeedMultiplier,
         double predictionInterval,
         bool auto_shoot,
         float bScope_multiplier,
@@ -225,10 +217,6 @@ public:
 
     void updateConfig(
         int resolution,
-        int fovX,
-        int fovY,
-        double minSpeedMultiplier,
-        double maxSpeedMultiplier,
         double predictionInterval,
         bool auto_shoot,
         float bScope_multiplier

@@ -3,11 +3,13 @@
 #include <winsock2.h>
 #include <Windows.h>
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <filesystem>
 #include <utility>
 #include <fstream>
+#include <cstdio>
 #include <cstring>
 #include <cctype>
 #include <cstdint>
@@ -47,6 +49,16 @@ std::string metadataValue(const ModelReport& report, const char* key)
     return it == report.custom_metadata.end() ? std::string() : it->second;
 }
 
+std::string TrimAsciiValue(std::string text)
+{
+    const auto isSpace = [](unsigned char value) { return std::isspace(value) != 0; };
+    const auto first = std::find_if_not(text.begin(), text.end(), isSpace);
+    const auto last = std::find_if_not(text.rbegin(), text.rend(), isSpace).base();
+    if (first >= last)
+        return std::string();
+    return std::string(first, last);
+}
+
 std::string shapeText(const std::vector<int64_t>& shape)
 {
     std::ostringstream output;
@@ -60,11 +72,98 @@ std::string shapeText(const std::vector<int64_t>& shape)
     return output.str();
 }
 
+std::vector<int64_t> parseShapeText(const std::string& text)
+{
+    std::vector<int64_t> shape;
+    int64_t value = 0;
+    bool inNumber = false;
+    bool negative = false;
+    for (const char c : text)
+    {
+        if (std::isdigit(static_cast<unsigned char>(c)))
+        {
+            value = value * 10 + static_cast<int64_t>(c - '0');
+            inNumber = true;
+        }
+        else if (c == '-' && !inNumber)
+        {
+            negative = true;
+        }
+        else
+        {
+            if (inNumber)
+            {
+                shape.push_back(negative ? -value : value);
+                value = 0;
+                inNumber = false;
+                negative = false;
+            }
+        }
+    }
+    if (inNumber)
+        shape.push_back(negative ? -value : value);
+    return shape;
+}
+
+std::string yoloVersionFromEmbeddedMetadata(const ModelReport& report)
+{
+    const auto direct = report.custom_metadata.find("yolo_version");
+    if (direct != report.custom_metadata.end() &&
+        !direct->second.empty() &&
+        direct->second != "unknown")
+    {
+        return direct->second;
+    }
+
+    // 兼容旧 engine：构建期没有写入 yolo_version，但 description 里带有
+    // "YOLO26s" 这类 Ultralytics 导出信息，可安全提取具体大版本。
+    const auto description = report.custom_metadata.find("description");
+    if (description != report.custom_metadata.end())
+    {
+        std::string hay = description->second;
+        for (char& c : hay)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const std::size_t yoloPos = hay.find("yolo");
+        if (yoloPos != std::string::npos)
+        {
+            std::size_t i = yoloPos + 4;
+            const bool hasV = (i < hay.size() && hay[i] == 'v');
+            if (hasV)
+                ++i;
+            std::string digits;
+            while (i < hay.size() && std::isdigit(static_cast<unsigned char>(hay[i])))
+            {
+                digits.push_back(description->second[i]);
+                ++i;
+            }
+            if (!digits.empty())
+                return hasV ? "YOLOv" + digits : "YOLO" + digits;
+        }
+    }
+
+    const auto outputShape = report.custom_metadata.find("output_0_shape");
+    if (outputShape != report.custom_metadata.end())
+    {
+        const std::vector<int64_t> shape = parseShapeText(outputShape->second);
+        if (shape.size() == 3 &&
+            shape[1] > 100 && shape[1] < 500 &&
+            shape[2] == 6)
+        {
+            return "YOLO26";
+        }
+    }
+
+    return std::string();
+}
+
 std::string simpleVersion(const std::string& version)
 {
+    if (version.empty() || version == "YOLO" ||
+        version == "Unknown" || version == "unknown")
+        return "未知";
     if (version.rfind("YOLOv", 0) == 0) return "v" + version.substr(5);
     if (version.rfind("YOLO", 0) == 0) return "v" + version.substr(4);
-    return version.empty() ? "未知" : version;
+    return version;
 }
 
 std::string scaleText(const YoloInfo& yolo)
@@ -110,18 +209,25 @@ constexpr char kEmbeddedMetaMagic2[] = { 'K', 'M', 'X', '2' };
 
 std::string readEngineEmbeddedMetadata(const std::filesystem::path& enginePath)
 {
-    std::ifstream file(enginePath, std::ios::binary);
-    if (!file.good())
+    FILE* file = _wfopen(enginePath.wstring().c_str(), L"rb");
+    if (!file)
         return std::string();
-    file.seekg(0, std::ios::end);
-    const std::streamoff fileSize = file.tellg();
+    fseek(file, 0, SEEK_END);
+    const long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
     if (fileSize < 12)
+    {
+        fclose(file);
         return std::string();
-    const size_t size = static_cast<size_t>(fileSize);
-    file.seekg(0, std::ios::beg);
+    }
+    const std::size_t size = static_cast<std::size_t>(fileSize);
     std::vector<char> data(size);
-    file.read(data.data(), size);
-    file.close();
+    if (fread(data.data(), 1, size, file) != size)
+    {
+        fclose(file);
+        return std::string();
+    }
+    fclose(file);
 
     if (std::memcmp(data.data() + size - 4, kEmbeddedMetaMagic2, 4) != 0)
         return std::string();
@@ -144,7 +250,8 @@ void parseEmbeddedMetadata(const std::string& text, ModelReport& report)
         const std::size_t eq = line.find('=');
         if (eq == std::string::npos || eq == 0)
             continue;
-        report.custom_metadata[line.substr(0, eq)] = line.substr(eq + 1);
+        report.custom_metadata[TrimAsciiValue(line.substr(0, eq))] =
+            TrimAsciiValue(line.substr(eq + 1));
     }
 }
 
@@ -239,7 +346,20 @@ void applyEmbeddedMetadataToYolo(ModelReport& report)
 
     if (const auto it = report.custom_metadata.find("task"); it != report.custom_metadata.end())
         yolo.task = it->second;
-    if (yolo.version.empty() || yolo.version == "unknown")
+    if (report.export_time.empty())
+    {
+        const auto dateIt = report.custom_metadata.find("date");
+        if (dateIt != report.custom_metadata.end() && !dateIt->second.empty())
+            report.export_time = TrimAsciiValue(dateIt->second);
+        else
+            report.export_time = TrimAsciiValue(report.file_mtime);
+    }
+    else
+        report.export_time = TrimAsciiValue(report.export_time);
+    const std::string embeddedVersion = yoloVersionFromEmbeddedMetadata(report);
+    if (!embeddedVersion.empty())
+        yolo.version = embeddedVersion;
+    else if (yolo.version.empty() || yolo.version == "unknown")
         yolo.version = "YOLO";   // 无 ONNX 元数据时无法确认具体大版本，用泛称
     if (yolo.classes >= 0 && yolo.width > 0 && yolo.height > 0)
         yolo.is_yolo = true;
@@ -318,17 +438,23 @@ bool readModelReport(const std::filesystem::path& modelPath, ModelReport& report
     OnnxProtoParser::Parse(pathWide, report);
     MergeSymbolic(report);
     YoloAnalyzer::Analyze(report);
+    report.export_time = TrimAsciiValue(report.export_time);
     return true;
 }
 }
 
 OnnxInspectionResult inspectOnnxModel(const std::string& modelPath)
 {
+    return inspectOnnxModel(std::filesystem::path(modelPath));
+}
+
+OnnxInspectionResult inspectOnnxModel(const std::filesystem::path& modelPath)
+{
     try
     {
         ModelReport report;
         std::string error;
-        if (!readModelReport(std::filesystem::path(modelPath), report, error)) return failure(error);
+        if (!readModelReport(modelPath, report, error)) return failure(error);
 
         std::ostringstream reportStream;
         PrintReport(report, reportStream);
@@ -354,27 +480,40 @@ OnnxInspectionResult inspectOnnxModel(const std::string& modelPath)
     }
 }
 
-static std::pair<int,int> modelResolutionFromOnnxInputs(const ModelReport& report, int fallback)
+static bool modelResolutionFromOnnxInputs(const ModelReport& report, int& outWidth, int& outHeight)
 {
     for (const auto& in : report.inputs)
     {
         const auto& s = in.shape;
         if (s.size() == 4 && s[2] > 0 && s[3] > 0)
-            return { static_cast<int>(s[2]), static_cast<int>(s[3]) };
+        {
+            outWidth = static_cast<int>(s[2]);
+            outHeight = static_cast<int>(s[3]);
+            return true;
+        }
     }
     if (report.yolo.width > 0 && report.yolo.height > 0)
-        return { report.yolo.width, report.yolo.height };
-    return { fallback, fallback };
+    {
+        outWidth = report.yolo.width;
+        outHeight = report.yolo.height;
+        return true;
+    }
+    return false;
 }
 
 StartupOnnxReport inspectLoadedEngineOnnx(const std::string& modelPath, int runtimeResolution)
 {
+    return inspectLoadedEngineOnnx(std::filesystem::path(modelPath), runtimeResolution);
+}
+
+StartupOnnxReport inspectLoadedEngineOnnx(const std::filesystem::path& selectedPath, int runtimeResolution)
+{
     // 降级结果：仅代表"拿不到 .onnx 元信息"，不应影响主程序继续启动。
-    const auto degraded = [runtimeResolution](const std::string& reason) -> StartupOnnxReport
+    (void)runtimeResolution; // 保留签名兼容；未知时不再用默认值冒充真实尺寸。
+    const auto degraded = [](const std::string& reason) -> StartupOnnxReport
     {
         return { false,
-            "智能推断，当前模型分辨率：" + std::to_string(runtimeResolution) + "x" + std::to_string(runtimeResolution)
-                + "，模型类别数量：未知，模型版本：未知",
+            "智能推断，当前模型分辨率：未知，模型类别数量：未知，模型版本：未知",
             "智能推断，当前模型类别数量：未知",
             "",
             reason };
@@ -389,7 +528,7 @@ StartupOnnxReport inspectLoadedEngineOnnx(const std::string& modelPath, int runt
     // 现就地捕获并降级，主链路（引擎加载/推理/瞄准）不受影响。
     try
     {
-        const std::filesystem::path selected(modelPath);
+        const std::filesystem::path selected = selectedPath;
         const std::filesystem::path onnx = selected.extension() == ".onnx"
             ? selected
             : selected.parent_path() / (selected.stem().string() + ".onnx");
@@ -405,32 +544,45 @@ StartupOnnxReport inspectLoadedEngineOnnx(const std::string& modelPath, int runt
                 const std::string embedded = readEngineEmbeddedMetadata(selected);
                 if (!embedded.empty())
                 {
+                    GetFileInfo(selected.wstring(), report.file_size, report.file_mtime);
                     parseEmbeddedMetadata(embedded, report);
                     applyEmbeddedMetadataToYolo(report);
                     // 绑定维度补充块只有 imgsz 没有 nc，类别数可能仍为 -1，此时显示"未知"。
                     const std::string classesText = report.yolo.classes >= 0
                         ? std::to_string(report.yolo.classes) : "未知";
-                    const auto [summaryWidth, summaryHeight] = modelResolutionFromOnnxInputs(report, runtimeResolution);
-                    const std::string summary = "智能推断，当前模型分辨率：" + std::to_string(summaryWidth) + "x" + std::to_string(summaryHeight)
+                    int summaryWidth = 0;
+                    int summaryHeight = 0;
+                    const bool hasModelSize = modelResolutionFromOnnxInputs(report, summaryWidth, summaryHeight);
+                    const std::string resolutionText = hasModelSize
+                        ? "智能推断，当前模型分辨率：" + std::to_string(summaryWidth) + "x" + std::to_string(summaryHeight)
+                        : "智能推断，当前模型分辨率：未知";
+                    const std::string summary = resolutionText
                         + "，模型类别数量：" + classesText + "，模型版本：" + simpleVersion(report.yolo.version);
                     return { true,
                         summary,
                         "智能推断，当前模型类别数量：" + classesText,
                         modelClassNames(report),
-                        exactStartupText(report, summary) };
+                        exactStartupText(report, summary),
+                        summaryWidth, summaryHeight };
                 }
             }
             return degraded(error);
         }
 
-        const auto [summaryWidth, summaryHeight] = modelResolutionFromOnnxInputs(report, runtimeResolution);
-        const std::string summary = "智能推断，当前模型分辨率：" + std::to_string(summaryWidth) + "x" + std::to_string(summaryHeight)
+        int summaryWidth = 0;
+        int summaryHeight = 0;
+        const bool hasModelSize = modelResolutionFromOnnxInputs(report, summaryWidth, summaryHeight);
+        const std::string resolutionText = hasModelSize
+            ? "智能推断，当前模型分辨率：" + std::to_string(summaryWidth) + "x" + std::to_string(summaryHeight)
+            : "智能推断，当前模型分辨率：未知";
+        const std::string summary = resolutionText
             + "，模型类别数量：" + std::to_string(report.yolo.classes) + "，模型版本：" + simpleVersion(report.yolo.version);
         return { true,
             summary,
             "智能推断，当前模型类别数量：" + std::to_string(report.yolo.classes),
             modelClassNames(report),
-            exactStartupText(report, summary) };
+            exactStartupText(report, summary),
+            summaryWidth, summaryHeight };
     }
     catch (const Ort::Exception& error)
     {

@@ -386,10 +386,6 @@ void mouseThreadFunction(MouseThread& mouseThread)
                 appliedDetectionResolution = config.detection_resolution;
                 mouseThread.updateConfig(
                     config.detection_resolution,
-                    config.fovX,
-                    config.fovY,
-                    config.minSpeedMultiplier,
-                    config.maxSpeedMultiplier,
                     config.predictionInterval,
                     config.auto_shoot,
                     config.bScope_multiplier
@@ -425,13 +421,12 @@ void mouseThreadFunction(MouseThread& mouseThread)
                 // ── Dynamic Range: compute effective FOV ──
                 if (prevDynamicRangeEnabled)
                 {
-                    int originalFovX = 121;
+                    constexpr int originalFovX = 121;
                     int shrinkScope = 320;
                     int shrinkDurationMs = prevDynamicShrinkDurationMs;
                     int restoreDurationMs = prevDynamicRestoreDurationMs;
                     {
                         std::lock_guard<std::mutex> cfgLock(configMutex);
-                        originalFovX = config.fovX;
                         shrinkScope = prevDynamicShrinkScope;
                     }
 

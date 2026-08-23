@@ -24,6 +24,7 @@ struct HumanizerSettings
     float wobble         = 0.0f; // 曲线扰动幅度 (px)
     float overshoot      = 0.0f; // 末端过冲幅度 (px)
     float speedVariation = 0.0f; // 速度波动比例 (0~1)
+    float powerLaw       = 0.0f; // 2/3 幂律速度整形强度 (0~1, 0=关闭)
 };
 
 class Humanizer
@@ -55,5 +56,7 @@ private:
     int   m_overshootRemaining = 0; // 剩余过冲帧数
     int   m_overshootCooldown = 0;  // 过冲后冷却帧数 (防大 tracking 下反复触发振荡)
     float m_oshootDX = 0.0f, m_oshootDY = 0.0f; // 每帧过冲增量
+    bool  m_hasStep = false;          // 2/3 幂律: 是否有上一步增量
+    float m_prevDx = 0.0f, m_prevDy = 0.0f; // 2/3 幂律: 上一帧增量方向
     std::normal_distribution<float> m_gauss{0.0f, 1.0f}; // 标准正态分布 (缓存, apply 时乘幅度)
 };

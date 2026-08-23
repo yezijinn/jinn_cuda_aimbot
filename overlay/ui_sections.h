@@ -36,8 +36,6 @@ inline const char* TooltipForSetting(const char* label) noexcept
     if (!label) return nullptr;
     if (std::strcmp(label, "置信度阈值") == 0) return "模型认为目标可信的最低分数。提高可减少误检，降低可发现更多目标。";
     if (std::strcmp(label, "NMS 阈值") == 0) return "过滤重叠检测框的阈值。数值越低越容易合并重叠框。";
-    if (std::strcmp(label, "移动灵敏度") == 0 || std::strcmp(label, "水平灵敏度") == 0 || std::strcmp(label, "垂直灵敏度") == 0)
-        return "匹配游戏鼠标灵敏度和水平、垂直旋转比例。数值越大，同样的鼠标移动产生的视角变化越大。";
     if (std::strcmp(label, "kalman位置过程噪声") == 0 || std::strcmp(label, "kalman速度过程噪声") == 0 ||
         std::strcmp(label, "kalman测量噪声") == 0 || std::strcmp(label, "kalman速度阻尼") == 0 ||
         std::strcmp(label, "kalman最大速度") == 0 || std::strcmp(label, "kalman预热帧数") == 0)
@@ -45,6 +43,18 @@ inline const char* TooltipForSetting(const char* label) noexcept
     if (std::strcmp(label, "轨迹强度") == 0 || std::strcmp(label, "轨迹微扰强度") == 0 ||
         std::strcmp(label, "轨迹最大速度") == 0 || std::strcmp(label, "轨迹距离") == 0)
         return "调整鼠标移动轨迹的平滑程度和速度。数值越大通常动作更明显或更快，过大可能造成跟随不稳定。";
+    if (std::strcmp(label, "横向最大速度") == 0 || std::strcmp(label, "纵向最大速度") == 0)
+        return "简化鼠标控制下该轴的移动速度上限。数值越大追得快，过大容易过冲。";
+    if (std::strcmp(label, "横向积分增益") == 0 || std::strcmp(label, "纵向积分增益") == 0)
+        return "该轴的积分增益，用于修正长时间残差。过高会导致反向摆动。";
+    if (std::strcmp(label, "横向震荡抑制") == 0 || std::strcmp(label, "纵向震荡抑制") == 0)
+        return "该轴的震荡抑制，越大越能压低过冲抖动。";
+    if (std::strcmp(label, "横向追踪强度") == 0 || std::strcmp(label, "纵向追踪强度") == 0)
+        return "该轴的追踪强度，决定误差到输出的敏感度。";
+    if (std::strcmp(label, "横向死区") == 0 || std::strcmp(label, "纵向死区") == 0)
+        return "该轴误差小于此像素量时停止输出，减少末端抖动。";
+    if (std::strcmp(label, "单帧最大移动像素量") == 0)
+        return "每帧允许移动的最大合成像素量，防止准星瞬移。";
     if (std::strcmp(label, "动态范围") == 0 || std::strcmp(label, "动态范围缩小范围(px)") == 0)
         return "动态范围用于目标较多时缩小搜索区域。范围数值越大，缩小后的区域越小，可能漏掉边缘目标。";
     if (std::strcmp(label, "自动标注最低置信度") == 0 || std::strcmp(label, "自动标注最大框数") == 0)
@@ -78,22 +88,9 @@ inline const char* TooltipForSetting(const char* label) noexcept
     if (std::strcmp(label, "绑定鼠标键") == 0) return "按住此鼠标键时启用当前热键配置。每个物理按键只能绑定到一个热键。";
     if (std::strcmp(label, "热键优先级") == 0) return "多个热键同时按下时用于选择配置。数值越小优先级越高。";
     if (std::strcmp(label, "保存配置到文件") == 0) return "立即将当前界面设置写入 config.ini。修改后建议保存一次。";
-    if (std::strcmp(label, "FOV范围X") == 0 || std::strcmp(label, "FOV范围Y") == 0)
-        return "限制检测和瞄准活动范围。数值越大覆盖区域越广，但处理量和误选目标的可能性也会增加。";
-    if (std::strcmp(label, "当前游戏") == 0)
-        return "选择当前使用的游戏配置。不同配置可以保存不同灵敏度、视野和瞄准参数。";
-    if (std::strcmp(label, "灵敏度") == 0 || std::strcmp(label, "水平灵敏度") == 0 || std::strcmp(label, "垂直灵敏度") == 0)
-        return "匹配游戏鼠标灵敏度和水平、垂直旋转比例。数值越大，同样的鼠标移动产生的视角变化越大。";
-    if (std::strcmp(label, "视野缩放") == 0)
-        return "根据游戏的视野缩放状态修正鼠标移动计算。使用瞄准镜或不同FOV时建议按游戏状态设置。";
-    if (std::strcmp(label, "基础视野") == 0)
-        return "游戏未缩放时的基础视野角度。数值越大，视角换算越宽。";
-    if (std::strcmp(label, "新配置名称") == 0)
-        return "输入新游戏配置名称，然后点击右侧按钮创建独立配置。";
-    if (std::strcmp(label, "配置") == 0)
-        return "删除当前游戏配置。删除前请确认当前配置不是仍在使用的配置。";
-    if (std::strcmp(label, "配置管理") == 0)
-        return "创建、切换或删除游戏配置。配置修改后请保存到文件。";
+    if (std::strcmp(label, "加载配置文件") == 0) return "从 ai.exe 同目录中选择并加载 config.ini 或 config_*.ini。";
+    if (std::strcmp(label, "命令配置文件") == 0) return "输入 xxx 将保存或覆盖为 config_xxx.ini，留空则使用 config.ini。";
+    if (std::strcmp(label, "保存配置文件") == 0) return "命令输入框有文本时保存到对应配置文件，留空时保存/覆盖 config.ini。";
     if (std::strcmp(label, "输入设备") == 0 || std::strcmp(label, "输入方式") == 0)
         return "选择输出鼠标移动和按键事件的后端。普通用户建议先使用WIN32标准方式。";
     if (std::strcmp(label, "模型后端") == 0 || std::strcmp(label, "后端") == 0 || std::strcmp(label, "模型路径与后端") == 0)
@@ -130,8 +127,6 @@ inline const char* TooltipForSetting(const char* label) noexcept
         return "程序级类别开关。关闭后该类别不会进入检测结果、锁定、瞄准或自动扳机。至少保留一个类别开启。";
     if (std::strcmp(label, "恢复全部默认参数") == 0)
         return "将全局配置和热键配置恢复为出厂默认值。执行前会备份当前配置，请谨慎使用。";
-    if (std::strcmp(label, "当前配置") == 0)
-        return "显示当前游戏配置的名称和关键参数。修改下面的参数后会影响当前配置。";
     if (std::strcmp(label, "动态范围") == 0 || std::strcmp(label, "动态范围缩小范围(px)") == 0)
         return "动态范围用于目标较多时缩小搜索区域。范围数值越大，缩小后的区域越小，可能漏掉边缘目标。";
     if (std::strcmp(label, "轨迹距离") == 0 || std::strcmp(label, "轨迹强度") == 0 ||
@@ -153,54 +148,6 @@ inline const char* TooltipForSetting(const char* label) noexcept
         return "开启后，目标进入扳机区域并满足时序条件时自动发送按键。关闭后不会自动触发。";
     if (std::strcmp(label, "目标丢失时停火") == 0)
         return "目标离开检测结果或扳机区域后是否自动松开按键。建议开启，避免目标丢失后持续按键。";
-    if (std::strcmp(label, "FOV X") == 0 || std::strcmp(label, "FOV Y") == 0)
-        return "限制检测和瞄准活动范围。数值越大覆盖区域越广，但处理量和误选目标的可能性也会增加。";
-    if (std::strcmp(label, "Min Speed Multiplier") == 0 || std::strcmp(label, "Max Speed Multiplier") == 0)
-        return "控制鼠标移动速度范围。数值越大移动更快，数值越小移动更慢但通常更平滑。";
-    if (std::strcmp(label, "Prediction Interval") == 0)
-        return "目标预测使用的时间间隔。数值越大预测更激进，可能提前但也更容易偏移；设为零表示关闭预测。";
-    if (std::strcmp(label, "Future Positions") == 0 || std::strcmp(label, "Draw Future Positions") == 0)
-        return "预测或绘制未来目标位置。数量越多轨迹越长，但计算量和预测误差也会增加。";
-    if (std::strcmp(label, "Enable Kalman Filter") == 0)
-        return "平滑检测框的位置和速度，减少检测抖动。开启后可以调整kalman滤波参数。";
-    if (std::strcmp(label, "Kalman Process Noise Pos") == 0 || std::strcmp(label, "Kalman Process Noise Vel") == 0 ||
-        std::strcmp(label, "Kalman Measurement Noise") == 0 || std::strcmp(label, "Kalman Velocity Damping") == 0 ||
-        std::strcmp(label, "Kalman Max Velocity") == 0 || std::strcmp(label, "Kalman Warmup Frames") == 0 ||
-        std::strcmp(label, "Kalman Compensate Inference Delay") == 0 ||
-        std::strcmp(label, "Kalman Additional Predict (ms)") == 0 ||
-        std::strcmp(label, "Kalman Reset Timeout (s)") == 0)
-        return "kalman滤波参数。增大通常会减少抖动但降低响应速度，减小通常更灵敏但更容易受到检测噪声影响。";
-    if (std::strcmp(label, "Snap Radius") == 0 || std::strcmp(label, "Near Radius") == 0 ||
-        std::strcmp(label, "Speed Curve Exponent") == 0 || std::strcmp(label, "Snap Boost Factor") == 0)
-        return "调整目标修正的范围和速度曲线。数值越大通常修正范围或力度越大，过大可能造成跟随不稳定。";
-    if (std::strcmp(label, "Active Game Profile") == 0)
-        return "选择当前游戏配置。不同配置可以保存不同灵敏度、视野和瞄准参数。";
-    if (std::strcmp(label, "Sensitivity") == 0 || std::strcmp(label, "Yaw") == 0 || std::strcmp(label, "Pitch") == 0)
-        return "匹配游戏鼠标灵敏度和水平、垂直旋转比例。数值越大，同样的鼠标移动产生的视角变化越大。";
-    if (std::strcmp(label, "FOV Scaled") == 0 || std::strcmp(label, "Base FOV") == 0)
-        return "根据游戏视野缩放状态修正鼠标移动计算。使用瞄准镜或不同FOV时按游戏设置调整。";
-    if (std::strcmp(label, "New profile name") == 0)
-        return "输入新游戏配置名称，然后点击右侧按钮创建独立配置。";
-    if (std::strcmp(label, "Profile") == 0)
-        return "删除当前游戏配置。删除前请确认当前配置不是仍在使用的配置。";
-    if (std::strcmp(label, "Easy No Recoil") == 0)
-        return "开启后尝试抵消连续射击造成的后坐力。关闭后不会执行后坐力修正。";
-    if (std::strcmp(label, "No Recoil Strength") == 0)
-        return "后坐力修正强度。数值越大修正越强，过大可能造成反向移动或异常动作。";
-    if (std::strcmp(label, "Auto Shoot") == 0)
-        return "开启后允许程序自动发送射击按键。关闭后不会自动射击。";
-    if (std::strcmp(label, "bScope Multiplier") == 0)
-        return "瞄准镜状态下的速度倍率。数值越大瞄准镜内移动越快。";
-    if (std::strcmp(label, "Enable WindMouse") == 0)
-        return "使用更平滑、带自然扰动的鼠标移动轨迹。开启后可以调整下面的轨迹参数。";
-    if (std::strcmp(label, "Gravity force") == 0 || std::strcmp(label, "Wind fluctuation") == 0 ||
-        std::strcmp(label, "Max step (velocity clip)") == 0 ||
-        std::strcmp(label, "Distance where behaviour changes") == 0)
-        return "WindMouse 轨迹参数。增大通常会提高移动速度或扰动，过大可能造成轨迹不稳定。";
-    if (std::strcmp(label, "Wind Mouse") == 0)
-        return "将 WindMouse 的轨迹参数恢复为默认值。";
-    if (std::strcmp(label, "Mouse Input Method") == 0)
-        return "选择输出鼠标移动和按键事件的后端。普通用户建议先使用 WIN32。";
     if (std::strcmp(label, "Makcu Port") == 0)
         return "选择硬件鼠标使用的串口。设备连接或端口变化后需要重新连接。";
     if (std::strcmp(label, "Makcu Baudrate") == 0)

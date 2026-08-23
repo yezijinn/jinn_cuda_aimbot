@@ -734,19 +734,26 @@ bool TrtDetector::initialize(const std::string& modelFile)
     // 【修复 G·无锁写共享配置】fixed_input_size 由 UI 线程（持 configMutex）读写，
     // 此处在推理线程无锁改写属数据竞争。改为持锁写；读取 detection_resolution
     // 一并在同一临界区取快照，避免同一函数内前后取到不一致的值。
-    int target = 0;
+    int targetWidth = 0;
+    int targetHeight = 0;
+    int staticWorkingWidth = 0;
     {
         std::lock_guard<std::mutex> lock(configMutex);
         if (isStatic != config.fixed_input_size)
         {
             config.fixed_input_size = isStatic;
         }
-        target = config.detection_resolution;
+        staticWorkingWidth = config.detection_resolution;
+        bool forceValid = config.force_model_input_size
+            && Config::normalizeModelInputSize(config.force_model_input_width,
+                                               config.force_model_input_height);
+        targetWidth = forceValid ? config.force_model_input_width : config.detection_resolution;
+        targetHeight = forceValid ? config.force_model_input_height : config.detection_resolution;
     }
     nvinfer1::Dims inputDims = modelInputDims;
     if (!isStatic)
     {
-        nvinfer1::Dims4 newShape{ 1, 3, target, target };
+        nvinfer1::Dims4 newShape{ 1, 3, targetHeight, targetWidth };
         context->setInputShape(inputName.c_str(), newShape);
         if (!context->allInputDimensionsSpecified())
         {
@@ -838,9 +845,12 @@ bool TrtDetector::initialize(const std::string& modelFile)
         return false;
     }
 
-    // 使用上文同一临界区取到的 detection_resolution 快照，保证与 setInputShape
-    // 所用的值严格一致（原实现二次无锁读取，UI 中途改分辨率会得到错配的缩放系数）。
-    img_scale = static_cast<float>(target) / w;
+    // 使用上文同一临界区取到的尺寸快照，保证与 setInputShape 所用值严格一致。
+    // 静态引擎无法强制改 shape，因此 static 分支按模型真实输入尺寸保存。
+    modelInputWidth = w;
+    modelInputHeight = h;
+    const int workingWidth = isStatic ? staticWorkingWidth : targetWidth;
+    img_scale = static_cast<float>(workingWidth) / w;
 
     std::cout << "\n========== TensorRT 模型摘要 ==========" << std::endl;
     std::cout << "加载来源路径:" << std::endl;
@@ -1405,8 +1415,21 @@ void TrtDetector::inferenceThread()
                     std::lock_guard<std::mutex> lock(configMutex);
                     refreshResolution = config.detection_resolution;
                 }
-                publishStartupOnnxReport(
-                    inspectLoadedEngineOnnx(modelPath.string(), refreshResolution));
+                const StartupOnnxReport refreshReport =
+                    inspectLoadedEngineOnnx(modelPath.string(), refreshResolution);
+                publishStartupOnnxReport(refreshReport);
+                {
+                    std::lock_guard<std::mutex> lock(configMutex);
+                    if (refreshReport.width > 0)
+                        config.model_input_width = refreshReport.width;
+                    if (refreshReport.height > 0)
+                        config.model_input_height = refreshReport.height;
+                    const int actualW = (refreshReport.width > 0)
+                        ? refreshReport.width
+                        : modelInputWidth;
+                    if (actualW > 0)
+                        config.detection_resolution = actualW;
+                }
             }
             detection_resolution_changed.store(true);
             detector_model_changed.store(false);

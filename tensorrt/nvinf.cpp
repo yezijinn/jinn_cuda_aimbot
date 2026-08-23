@@ -13,6 +13,7 @@
 #include <limits>
 #include <string>
 #include <algorithm>
+#include <set>
 #include <cstdint>
 #include <cstring>
 #include <NvOnnxParser.h>
@@ -64,7 +65,8 @@ std::string BuildEmbeddedMetadata(const std::string& onnxFile)
         const Ort::ModelMetadata meta = session.GetModelMetadata();
 
         Ort::AllocatorWithDefaultOptions alloc;
-        const auto push = [&out](const std::string& key, std::string value) {
+        bool hasYoloVersion = false;
+        const auto push = [&out, &hasYoloVersion](const std::string& key, std::string value) {
             if (value.empty())
                 return;
             std::replace(value.begin(), value.end(), '\n', ' ');
@@ -72,6 +74,8 @@ std::string BuildEmbeddedMetadata(const std::string& onnxFile)
             out += '=';
             out += value;
             out += '\n';
+            if (key == "yolo_version")
+                hasYoloVersion = true;
         };
 
         if (const auto s = meta.GetProducerNameAllocated(alloc)) push("author", s.get());
@@ -91,6 +95,38 @@ std::string BuildEmbeddedMetadata(const std::string& onnxFile)
                 continue;
             if (const auto value = meta.LookupCustomMetadataMapAllocated(key.get(), alloc))
                 push(key.get(), value.get());
+        }
+
+        // 追加 YOLO 版本推导：ONNX metadata 若未显式写入 yolo_version，
+        // 就按可识别的输出形状写入。当前已覆盖 YOLO26 end2end 的 [N, box, 6]。
+        // 该字段会使"只部署 .engine"时也能直接读取具体版本，而不是回退成泛称 YOLO。
+        const auto shapeText = [](const std::vector<int64_t>& shape) -> std::string
+        {
+            std::string text = "[";
+            for (std::size_t index = 0; index < shape.size(); ++index)
+            {
+                if (index != 0)
+                    text += ",";
+                text += std::to_string(shape[index]);
+            }
+            text += "]";
+            return text;
+        };
+
+        const size_t outputCount = session.GetOutputCount();
+        for (size_t index = 0; index < outputCount; ++index)
+        {
+            const Ort::TypeInfo typeInfo = session.GetOutputTypeInfo(index);
+            const auto shapeInfo = typeInfo.GetTensorTypeAndShapeInfo();
+            const std::vector<int64_t> shape = shapeInfo.GetShape();
+            push("output_" + std::to_string(index) + "_shape", shapeText(shape));
+            if (!hasYoloVersion &&
+                shape.size() == 3 &&
+                shape[1] > 100 && shape[1] < 500 &&
+                shape[2] == 6)
+            {
+                push("yolo_version", "YOLO26");
+            }
         }
     }
     catch (const std::exception& error)
@@ -260,12 +296,21 @@ std::string buildEngineBindingMetadata(nvinfer1::ICudaEngine* engine)
             continue;
         const bool isInput = engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT;
         const nvinfer1::Dims dims = engine->getTensorShape(name);
+        const bool isOutput = engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kOUTPUT;
+        const bool isOne2OneYolo26 =
+            isOutput &&
+            dims.nbDims == 3 &&
+            dims.d[1] > 100 && dims.d[1] < 500 &&
+            dims.d[2] == 6;
 
         const std::string prefix = std::string(isInput ? "input_" : "output_") + std::to_string(i);
         out += prefix;
         out += "_name=";
         out += name;
         out += '\n';
+        // 引擎只有 plan 信息时，这个字段是后续 onnx_inspector 推断 YOLO 版本的依据。
+        if (isOne2OneYolo26)
+            out += "yolo_version=YOLO26\n";
         out += prefix;
         out += "_shape=[";
         for (int32_t d = 0; d < dims.nbDims; ++d)
@@ -421,15 +466,33 @@ nvinfer1::ICudaEngine* buildEngineFromOnnx(const std::string& onnxFile, nvinfer1
     // 线程构成数据竞争。本函数在引擎构建线程执行，同样需持锁取快照。
     bool fixedByConfig = false;
     int detectionResolution = 0;
+    int forceWidth = 0;
+    int forceHeight = 0;
     {
         std::lock_guard<std::mutex> lock(configMutex);
         fixedByConfig = config.fixed_input_size;
         detectionResolution = config.detection_resolution;
+        if (config.force_model_input_size)
+        {
+            forceWidth = config.force_model_input_width;
+            forceHeight = config.force_model_input_height;
+            Config::normalizeModelInputSize(forceWidth, forceHeight);
+        }
     }
     bool makeStatic = fixedByModel || fixedByConfig;
 
     if (fixedByConfig && (H <= 0 || W <= 0))
-        H = W = detectionResolution;
+    {
+        if (forceWidth > 0 && forceHeight > 0)
+        {
+            H = forceHeight;
+            W = forceWidth;
+        }
+        else
+        {
+            H = W = detectionResolution;
+        }
+    }
 
     nvinfer1::IOptimizationProfile* profile = builder->createOptimizationProfile();
     if (makeStatic)

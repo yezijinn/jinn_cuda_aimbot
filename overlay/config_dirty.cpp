@@ -18,6 +18,12 @@ void OverlayConfig_MarkDirty()
     cfgDirtyAt = ImGui::GetTime();
 }
 
+void OverlayConfig_ClearDirty()
+{
+    cfgDirty = false;
+    cfgDirtyAt = 0.0;
+}
+
 void OverlayConfig_TrySave(const char* filename)
 {
     if (!cfgDirty)

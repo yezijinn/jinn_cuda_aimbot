@@ -48,7 +48,12 @@ public:
     std::string capture_window_title;
     std::string udp_ip;
     int udp_port;
-    int detection_resolution;
+    int detection_resolution = 320; // 内部工作分辨率，由模型输入尺寸自动同步
+    int model_input_width = 0;      // 最近一次识别到的模型真实输入宽
+    int model_input_height = 0;     // 最近一次识别到的模型真实输入高
+    bool force_model_input_size = false; // 强制指定模型输入尺寸
+    int force_model_input_width = 320;
+    int force_model_input_height = 320;
     int capture_fps;
     int monitor_idx;
     bool circle_fov_enabled;
@@ -70,11 +75,6 @@ public:
     std::string targeting_mode; // "closest_center" or "largest_box"
 
     // Mouse
-    int fovX;
-    int fovY;
-    float minSpeedMultiplier;
-    float maxSpeedMultiplier;
-
     float predictionInterval;
     int prediction_futurePositions;
     bool draw_futurePositions;
@@ -157,6 +157,9 @@ public:
     bool export_enable_fp16;
 #endif
     bool fixed_input_size;
+
+    // 校验并规范化模型输入尺寸。返回 false 表示尺寸完全不可用。
+    static bool normalizeModelInputSize(int& width, int& height) noexcept;
 
     // CUDA
 #ifdef USE_CUDA
@@ -275,22 +278,6 @@ public:
     std::vector<std::string> screenshot_button;
     int screenshot_delay;
     bool verbose;
-
-    struct GameProfile
-    {
-        std::string name;
-        double sens;
-        double yaw;
-        double pitch;
-        bool fovScaled;
-        double baseFOV;
-    };
-
-    std::unordered_map<std::string, GameProfile> game_profiles;
-    std::string                                  active_game;
-
-    const GameProfile & currentProfile() const;
-    std::pair<double, double> degToCounts(double degX, double degY, double fovNow) const;
 
     bool isClassEnabled(int classId) const noexcept;
     std::filesystem::path configPath() const;

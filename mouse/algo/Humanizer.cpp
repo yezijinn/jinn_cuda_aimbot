@@ -1,4 +1,5 @@
 #include "Humanizer.h"
+#include <algorithm>
 #include <cmath>
 
 // ============================================================================
@@ -14,6 +15,9 @@ namespace
     constexpr float kOvershootMinSpd = 50.0f; // 触发过冲的最低速度 (px/s)
     constexpr int   kOvershootFrames  = 5;    // 过冲分几帧输出
     constexpr int   kOvershootCooldown = 20;  // 过冲后冷却帧数 (0.2s), 防反复触发振荡
+    constexpr float kPowerCurvBase = 0.10f;   // 曲率代理参考值 (px^-1)
+    constexpr float kPowerScaleMin = 0.85f;   // 2/3 幂律速度整形下限
+    constexpr float kPowerScaleMax = 1.15f;   // 2/3 幂律速度整形上限
 }
 
 Humanizer::Humanizer()
@@ -23,7 +27,14 @@ Humanizer::Humanizer()
 
 void Humanizer::setSettings(const HumanizerSettings& s)
 {
-    m_s = s;
+    // 统一入口做参数钳制，避免配置注入 NaN/Inf、负数或超大值破坏轨迹。
+    HumanizerSettings safe = s;
+    safe.microJitter    = (std::isfinite(safe.microJitter)    ? std::clamp(safe.microJitter,    0.0f, 5.0f)  : 0.0f);
+    safe.wobble         = (std::isfinite(safe.wobble)         ? std::clamp(safe.wobble,         0.0f, 8.0f)  : 0.0f);
+    safe.overshoot      = (std::isfinite(safe.overshoot)      ? std::clamp(safe.overshoot,      0.0f, 10.0f) : 0.0f);
+    safe.speedVariation = (std::isfinite(safe.speedVariation) ? std::clamp(safe.speedVariation, 0.0f, 1.0f)  : 0.0f);
+    safe.powerLaw       = (std::isfinite(safe.powerLaw)       ? std::clamp(safe.powerLaw,       0.0f, 1.0f)  : 0.0f);
+    m_s = safe;
     reset();
 }
 
@@ -32,7 +43,8 @@ bool Humanizer::enabled() const
     return m_s.microJitter > 0.0f
         || m_s.wobble > 0.0f
         || m_s.overshoot > 0.0f
-        || m_s.speedVariation > 0.0f;
+        || m_s.speedVariation > 0.0f
+        || m_s.powerLaw > 0.0f;
 }
 
 void Humanizer::reset()
@@ -43,6 +55,9 @@ void Humanizer::reset()
     m_overshootCooldown = 0;
     m_oshootDX = 0.0f;
     m_oshootDY = 0.0f;
+    m_hasStep = false;
+    m_prevDx = 0.0f;
+    m_prevDy = 0.0f;
 }
 
 void Humanizer::apply(float& dx, float& dy, float speed, float distToTarget, float dt)
@@ -141,6 +156,38 @@ void Humanizer::apply(float& dx, float& dy, float speed, float distToTarget, flo
             dx += m_oshootDX;
             dy += m_oshootDY;
             --m_overshootRemaining;
+        }
+    }
+
+    // ---- 5) 2/3 幂律 (可选, 默认关闭): 按曲率代理调整本帧速度 ----
+    // 公式按需求: speed ~ curvature^(1/3)。
+    // 曲率代理用"相邻两帧位移方向夹角 / 本帧步长"近似, 不改变最终方向,
+    // 只轻微调整速度幅度。默认 powerLaw=0 时完全跳过, 不影响既有主链路。
+    if (m_s.powerLaw > 0.0f)
+    {
+        const float len = std::sqrt(dx * dx + dy * dy);
+        if (len > 1.0e-3f)
+        {
+            if (m_hasStep)
+            {
+                const float dot = std::clamp((dx * m_prevDx + dy * m_prevDy) /
+                                             (len * std::sqrt(m_prevDx * m_prevDx + m_prevDy * m_prevDy)),
+                                             -1.0f, 1.0f);
+                const float angle = std::acos(dot);
+                const float curvature = angle / len;
+                const float speedScale = std::pow(curvature / kPowerCurvBase, 1.0f / 3.0f);
+                const float scale = std::clamp(1.0f + m_s.powerLaw * (speedScale - 1.0f),
+                                               kPowerScaleMin, kPowerScaleMax);
+                dx *= scale;
+                dy *= scale;
+            }
+            m_prevDx = dx;
+            m_prevDy = dy;
+            m_hasStep = true;
+        }
+        else
+        {
+            m_hasStep = false;
         }
     }
 }

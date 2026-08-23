@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <cstring>
 #include <d3d11.h>
-#include <iostream>
 #include <string>
 #include <vector>
 #include <cstddef>
@@ -21,6 +20,7 @@
 #include "include/other_tools.h"
 #include "capture.h"
 #include "overlay/ui_sections.h"
+#include "overlay/draw_settings.h"
 #include "runtime/thread_loops.h"
 #include "mouse/AimbotTarget.h"
 
@@ -35,7 +35,6 @@
 #endif
 
 int prev_screenshot_delay = 0;
-bool prev_verbose = false;
 static bool debug_state_initialized = false;
 
 static ID3D11Texture2D* g_debugTex = nullptr;
@@ -128,59 +127,25 @@ static bool drawScreenshotButtonRows()
         config.screenshot_button.push_back("None");
         changed = true;
     }
-
-    for (size_t i = 0; i < config.screenshot_button.size();)
+    else if (config.screenshot_button.size() > 1)
     {
-        std::string& currentKeyName = config.screenshot_button[i];
-        int currentIndex = findDebugKeyIndexByName(currentKeyName);
-        const std::string rowLabel = (config.screenshot_button.size() > 1)
-            ? "截图 " + std::to_string(i + 1)
-            : "截图";
-
-        ImGui::PushID(static_cast<int>(i));
-
-        ImGui::TextUnformatted(rowLabel.c_str());
-        ImGui::SameLine();
-        const float actionBtnW = ImGui::GetFrameHeight();
-        ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
-
-        if (ImGui::Combo("##value", &currentIndex, key_display_names_cstrs.data(), static_cast<int>(key_display_names_cstrs.size())))
-        {
-            currentKeyName = key_names[currentIndex];
-            changed = true;
-        }
-
-        ImGui::SameLine(0.0f, 4.0f);
-        if (ImGui::Button("+", ImVec2(actionBtnW, 0.0f)))
-        {
-            config.screenshot_button.insert(config.screenshot_button.begin() + static_cast<std::vector<std::string>::difference_type>(i + 1), "None");
-            changed = true;
-        }
-
-        ImGui::SameLine(0.0f, 3.0f);
-        bool removedCurrent = false;
-        if (ImGui::Button("-", ImVec2(actionBtnW, 0.0f)))
-        {
-            if (config.screenshot_button.size() <= 1)
-            {
-                config.screenshot_button[0] = "None";
-            }
-            else
-            {
-                config.screenshot_button.erase(config.screenshot_button.begin() + static_cast<std::vector<std::string>::difference_type>(i));
-                removedCurrent = true;
-            }
-            changed = true;
-        }
-
-        ShowSettingTooltip(rowLabel.c_str());
-        ImGui::PopID();
-
-        if (removedCurrent)
-            continue;
-
-        ++i;
+        config.screenshot_button.resize(1);
+        changed = true;
     }
+
+    std::string& currentKeyName = config.screenshot_button[0];
+    int currentIndex = findDebugKeyIndexByName(currentKeyName);
+
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
+
+    if (ImGui::Combo("##screenshot_button", &currentIndex, key_display_names_cstrs.data(), static_cast<int>(key_display_names_cstrs.size())))
+    {
+        currentKeyName = key_names[currentIndex];
+        changed = true;
+    }
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("手动截图的按钮");
 
     return changed;
 }
@@ -326,8 +291,6 @@ static bool drawDataCollectionSection()
     // 第二行：两个并排
     changed |= ImGui::Checkbox("仅自瞄运行时截图", &config.collect_only_when_aimbot_running);
 
-    ImGui::SameLine();
-
     changed |= ImGui::Checkbox("仅出现目标时截图", &config.collect_only_when_targets_present);
 
     //ImGui::PopID();
@@ -336,7 +299,7 @@ static bool drawDataCollectionSection()
     const float collectionNumericButtonWidth = std::max(
         ImGui::CalcTextSize("-").x,
         ImGui::CalcTextSize("+").x) + ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
     bool saveEveryNFramesChanged = ImGui::InputInt("##save_every_n_frames", &saveEveryNFrames, 0, 0, ImGuiInputTextFlags_CharsDecimal);
     ImGui::SameLine(); if (ImGui::Button("-##save_every_n_frames")) { --saveEveryNFrames; saveEveryNFramesChanged = true; }
     ImGui::SameLine(); if (ImGui::Button("+##save_every_n_frames")) { ++saveEveryNFrames; saveEveryNFramesChanged = true; }
@@ -349,7 +312,7 @@ static bool drawDataCollectionSection()
     }
 
     int jpegQuality = config.collect_jpeg_quality;
-    ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
     bool jpegQualityChanged = ImGui::InputInt("##jpeg_quality", &jpegQuality, 0, 0, ImGuiInputTextFlags_CharsDecimal);
     ImGui::SameLine(); if (ImGui::Button("-##jpeg_quality")) { --jpegQuality; jpegQualityChanged = true; }
     ImGui::SameLine(); if (ImGui::Button("+##jpeg_quality")) { ++jpegQuality; jpegQualityChanged = true; }
@@ -361,7 +324,7 @@ static bool drawDataCollectionSection()
         changed = true;
     }
 
-    ImGui::SetNextItemWidth(UiLayout::kTextMediumWidth);
+    ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
     if (ImGui::InputText("保存目录 (可留空 默认使用程序screenshots目录)", g_collectOutputDirBuffer, sizeof(g_collectOutputDirBuffer)))
         changed |= applyDebugTextBuffer(config.collect_output_dir, g_collectOutputDirMirror, g_collectOutputDirBuffer);
 
@@ -372,7 +335,7 @@ static bool drawDataCollectionSection()
         ImGui::BeginDisabled(!config.auto_label_data);
 
         float minConf = config.auto_label_min_conf;
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         bool minConfChanged = ImGui::InputFloat("##auto_label_min_conf", &minConf, 0.0f, 0.0f, "%.4f", ImGuiInputTextFlags_CharsDecimal);
         ImGui::SameLine(); if (ImGui::Button("-##auto_label_min_conf")) { minConf -= 0.01f; minConfChanged = true; }
         ImGui::SameLine(); if (ImGui::Button("+##auto_label_min_conf")) { minConf += 0.01f; minConfChanged = true; }
@@ -386,7 +349,7 @@ static bool drawDataCollectionSection()
         }
 
         int maxBoxes = config.auto_label_max_boxes;
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         bool maxBoxesChanged = ImGui::InputInt("##auto_label_max_boxes", &maxBoxes, 0, 0, ImGuiInputTextFlags_CharsDecimal);
         ImGui::SameLine(); if (ImGui::Button("-##auto_label_max_boxes")) { --maxBoxes; maxBoxesChanged = true; }
         ImGui::SameLine(); if (ImGui::Button("+##auto_label_max_boxes")) { ++maxBoxes; maxBoxesChanged = true; }
@@ -399,7 +362,7 @@ static bool drawDataCollectionSection()
             changed = true;
         }
 
-        ImGui::SetNextItemWidth(UiLayout::kTextMediumWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         if (ImGui::InputText("想要标注的类别 (可留空 默认标注所有类别)", g_collectClassFilterBuffer, sizeof(g_collectClassFilterBuffer)))
             changed |= applyDebugTextBuffer(config.auto_label_record_classes, g_collectClassFilterMirror, g_collectClassFilterBuffer);
 
@@ -453,8 +416,10 @@ void draw_debug_frame()
 
     if (!g_debugSRV) return;
 
+    draw_inference_capacity_line();
+
     {
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         ImGui::InputFloat("##debug_scale", &debug_scale, 0.0f, 0.0f, "%.4f", ImGuiInputTextFlags_CharsDecimal);
         ImGui::SameLine(); if (ImGui::Button("-##debug_scale")) debug_scale -= 0.1f;
         ImGui::SameLine(); if (ImGui::Button("+##debug_scale")) debug_scale += 0.1f;
@@ -464,7 +429,7 @@ void draw_debug_frame()
 
     {
         const char* previewHotkeyLabels[] = { "热键1", "热键2", "热键3" };
-        ImGui::SetNextItemWidth(UiLayout::kComboMediumWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         ImGui::Combo("你想预览哪个热键的目标？", &debug_preview_hotkey_slot, previewHotkeyLabels,
             static_cast<int>(Config::MAX_MOUSE_HOTKEYS));
     }
@@ -474,12 +439,21 @@ void draw_debug_frame()
         0,
         static_cast<int>(Config::MAX_MOUSE_HOTKEYS) - 1);
     const auto& previewProfile = config.mouse_hotkeys[static_cast<std::size_t>(debug_preview_hotkey_slot)];
+    const bool selectedHotkeyActive = previewProfile.enabled;
+    if (!selectedHotkeyActive)
+    {
+        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 2.0f);
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "所选热键未激活");
+        ImGui::PopFont();
+    }
     const bool previewTriggerEnabled =
         previewProfile.localBool("trigger_enabled", config.trigger_targeting.enabled) &&
         previewProfile.localBool("trigger_enabled_for_hotkey", true);
 
     ImVec2 image_size(texW * debug_scale, texH * debug_scale);
     ImGui::Image((ImTextureID)(intptr_t)g_debugSRV, image_size);
+    if (!selectedHotkeyActive)
+        return;
 
     ImVec2 image_pos = ImGui::GetItemRectMin();
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -589,12 +563,7 @@ void draw_debug_frame()
             64, 1.0f);
 
         // 动态范围圆（瞄准触发区域）：根据 dynamic_range_enabled 实时调整
-        // 修复：config.fovX 为 int 且 loadConfig 不做范围校验，手改 config.ini 为 0
-        // 会导致除零 -> aimRadius = inf/NaN -> AddCircle 收到 NaN 半径、
-        // static_cast<int>(inf) 属未定义行为。此处对分母取下限 1。
-        const double baseFovX = static_cast<double>(config.fovX) > 0.0
-            ? static_cast<double>(config.fovX)
-            : 1.0;
+        constexpr double baseFovX = 121.0;
         double effectiveFov = g_dynamicEffectiveFov.load();
         if (!config.dynamic_range_enabled || !(effectiveFov > 0.0))
             effectiveFov = baseFovX;
@@ -680,17 +649,12 @@ void draw_capture_preview()
 {
     ImGui::PushID("capture_section_preview");
     {
-            if (ImGui::Checkbox("显示预览窗口 仅测试时开启 正常使用要关闭", &config.show_window))
-            {
-                OverlayConfig_MarkDirty();
-            }
-            ShowSettingTooltip("显示预览窗口 仅测试时开启 正常使用要关闭");
-    }
-
-        if (config.show_window)
+        if (ImGui::Checkbox("显示预览窗口", &config.show_window))
         {
-            draw_debug_frame();
+            OverlayConfig_MarkDirty();
         }
+        ShowSettingTooltip("显示预览窗口 仅测试时开启 正常使用要关闭");
+    }
 
     ImGui::PopID();
 }
@@ -704,7 +668,6 @@ void draw_debug()
     if (!debug_state_initialized)
     {
         prev_screenshot_delay = config.screenshot_delay;
-        prev_verbose = config.verbose;
         debug_state_initialized = true;
     }
 
@@ -714,7 +677,7 @@ void draw_debug()
             changed = true;
 
         ImGui::BeginGroup();
-        ImGui::SetNextItemWidth(UiLayout::kNumericWidth);
+        ImGui::SetNextItemWidth(UiLayout::kActionButtonWidth);
         bool screenshotDelayChanged = ImGui::InputInt("##screenshot_delay", &config.screenshot_delay, 0, 0, ImGuiInputTextFlags_CharsDecimal);
         ImGui::SameLine(); if (ImGui::Button("-##screenshot_delay")) { config.screenshot_delay -= 50; screenshotDelayChanged = true; }
         ImGui::SameLine(); if (ImGui::Button("+##screenshot_delay")) { config.screenshot_delay += 50; screenshotDelayChanged = true; }
@@ -722,20 +685,11 @@ void draw_debug()
         ShowSettingTooltip("截图延迟");
         if (screenshotDelayChanged)
             changed = true;
-        if (ImGui::Checkbox("详细控制台输出", &config.verbose))
-            changed = true;
         ImGui::EndGroup();
 
         if (config.screenshot_delay < 0)
             config.screenshot_delay = 0;
 
-        ImGui::PushID("button_cv2_build_info");
-        if (ImGui::Button("打印构建信息", ImVec2(UiLayout::kActionButtonWidth, 0.0f)))
-        {
-            std::cout << cv::getBuildInformation() << std::endl;
-        }
-
-        ImGui::PopID();
     ImGui::PopID();
 
     changed |= drawDataCollectionSection();
@@ -747,11 +701,9 @@ void draw_debug()
     ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "编译时间 %s", kCompileTimeText.c_str());
     ImGui::PopFont();
 
-    if (prev_screenshot_delay != config.screenshot_delay ||
-        prev_verbose != config.verbose)
+    if (prev_screenshot_delay != config.screenshot_delay)
     {
         prev_screenshot_delay = config.screenshot_delay;
-        prev_verbose = config.verbose;
         changed = true;
     }
 

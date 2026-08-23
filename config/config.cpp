@@ -210,6 +210,24 @@ void Config::normalizeHotkeyClassAimOffsets()
     }
 }
 
+bool Config::normalizeModelInputSize(int& width, int& height) noexcept
+{
+    constexpr int kMinSize = 32;
+    constexpr int kMaxSize = 1024;
+    auto normalize = [](int v) -> int {
+        if (v < kMinSize)
+            return kMinSize;
+        if (v > kMaxSize)
+            return kMaxSize;
+        return (v / 32) * 32;
+    };
+    width = normalize(width);
+    height = normalize(height);
+    return width >= kMinSize && width <= kMaxSize
+        && height >= kMinSize && height <= kMaxSize
+        && (width % 32) == 0 && (height % 32) == 0;
+}
+
 bool Config::loadConfig(const std::string& filename)
 {
     std::filesystem::path targetPath = filename.empty() ? std::filesystem::path("config.ini") : std::filesystem::path(filename);
@@ -242,6 +260,11 @@ bool Config::loadConfig(const std::string& filename)
         udp_ip = "0.0.0.0"; // UDP 接收 IP 地址，0.0.0.0 接受任意来源
         udp_port = 1234; // UDP 接收端口
         detection_resolution = 320; // 检测分辨率
+        model_input_width = 0; // 模型输入宽，启动后由模型信息自动写入
+        model_input_height = 0; // 模型输入高，启动后由模型信息自动写入
+        force_model_input_size = false; // 强制指定模型输入尺寸
+        force_model_input_width = 320;
+        force_model_input_height = 320;
         capture_fps = 60; // 采集帧率上限
         monitor_idx = 0; // 显示器索引
         circle_fov_enabled = true; // 启用圆形视野范围
@@ -262,16 +285,6 @@ bool Config::loadConfig(const std::string& filename)
         tracker_overlay_table_enabled = true; // 显示目标追踪列表
         targeting_mode = "closest_center"; // 选目标方式：最接近屏幕中心
 
-        // Mouse
-        // 修复：默认分支回退值须与读取分支（get_long("fovX",121)/
-        // get_long("fovY",90)）及 UI ValidateIntParam 默认值保持一致。
-        // 原 85/54 仅在首次生成 ini 时写入；若 ini 损坏缺键，读取分支会回退
-        // 到 121/90，导致行为悄悄变化。
-        fovX = 121; // 水平 FOV 范围
-        fovY = 90; // 垂直 FOV 范围
-        minSpeedMultiplier = 0.1f; // 最小瞄准速度倍率
-        maxSpeedMultiplier = 0.1f; // 最大瞄准速度倍率
-
         predictionInterval = 0.01f; // 目标预测时间间隔（秒）
         prediction_futurePositions = 20; // 预测未来位置数量
         draw_futurePositions = false; // 绘制预测位置
@@ -289,17 +302,17 @@ bool Config::loadConfig(const std::string& filename)
         // MouseController 移植模块 (依据 鼠标调参指南.md)
         mc_enabled = true;             // 总开关: 启用 MouseController
         // 分轴 X (默认均衡型)
-        mc_x_tracking = 3.0f;  mc_x_damping = 0.05f;  mc_x_maxspeed = 1500.0f;
-        mc_x_integral = 0.0f;  mc_x_deadzone = 2.0f;
+        mc_x_tracking = 4.5f;  mc_x_damping = 0.05f;  mc_x_maxspeed = 2400.0f;
+        mc_x_integral = 0.05f; mc_x_deadzone = 1.0f;
         // 分轴 Y (默认同 X)
-        mc_y_tracking = 3.0f;  mc_y_damping = 0.05f;  mc_y_maxspeed = 1500.0f;
-        mc_y_integral = 0.0f;  mc_y_deadzone = 2.0f;
+        mc_y_tracking = 4.5f;  mc_y_damping = 0.05f;  mc_y_maxspeed = 2400.0f;
+        mc_y_integral = 0.05f; mc_y_deadzone = 1.0f;
         // 全局参数
-        mc_maxstep = 30.0f;  mc_retarget = 50.0f;
+        mc_maxstep = 35.0f;  mc_retarget = 60.0f;
         // 算法参数 (自适应范围)
-        mc_ahead_min = 0.05f;  mc_ahead_max = 0.15f;
-        mc_dur_min = 0.15f;    mc_dur_max = 0.60f;
-        mc_kalman_q = 1000.0f; mc_kalman_r = 25.0f;
+        mc_ahead_min = 0.03f;  mc_ahead_max = 0.12f;
+        mc_dur_min = 0.12f;    mc_dur_max = 0.45f;
+        mc_kalman_q = 1500.0f; mc_kalman_r = 30.0f;
 
         snapRadius = 1.5f; // 吸附半径
         nearRadius = 25.0f; // 近距离半径
@@ -459,18 +472,6 @@ bool Config::loadConfig(const std::string& filename)
         screenshot_delay = 500; // 截图延迟（毫秒）
         verbose = false; // 输出详细日志
 
-        // Game profiles
-        game_profiles.clear();
-        GameProfile uni;
-        uni.name = "默认内置"; // 统一游戏配置名称
-        uni.sens = 1.0; // 游戏鼠标灵敏度
-        uni.yaw = 0.022; // 水平旋转比例
-        uni.pitch = uni.yaw; // 垂直旋转比例
-        uni.fovScaled = false; // 按视野缩放修正
-        uni.baseFOV = 0.0; // 游戏基础视野角度
-        game_profiles[uni.name] = uni;
-        active_game = uni.name; // 当前激活的游戏配置
-
         saveConfig(target);
         return true;
     }
@@ -516,55 +517,6 @@ bool Config::loadConfig(const std::string& filename)
             return ini.GetDoubleValue("", key, defval);
         };
 
-    game_profiles.clear();
-
-    CSimpleIniA::TNamesDepend keys;
-    ini.GetAllKeys("Games", keys);
-
-    for (const auto& k : keys)
-    {
-        std::string name = k.pItem;
-        std::string val = ini.GetValue("Games", k.pItem, "");
-        auto parts = splitString(val, ',');
-
-        try
-        {
-            if (parts.size() < 2)
-                throw std::runtime_error("not enough values");
-
-            GameProfile gp;
-            gp.name = name;
-            gp.sens = std::stod(parts[0]);
-            gp.yaw = std::stod(parts[1]);
-            gp.pitch = parts.size() > 2 ? std::stod(parts[2]) : gp.yaw;
-            gp.fovScaled = parts.size() > 3 && (parts[3] == "true" || parts[3] == "1");
-            gp.baseFOV = parts.size() > 4 ? std::stod(parts[4]) : 0.0;
-
-            game_profiles[name] = gp;
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "[Config] Failed to parse profile: " << name
-                << " = " << val << " (" << e.what() << ")" << std::endl;
-        }
-    }
-
-    if (!game_profiles.count("UNIFIED"))
-    {
-        GameProfile uni;
-        uni.name = "UNIFIED";
-        uni.sens = 1.0;
-        uni.yaw = 0.022;
-        uni.pitch = uni.yaw;
-        uni.fovScaled = false;
-        uni.baseFOV = 0.0;
-        game_profiles[uni.name] = uni;
-    }
-
-    active_game = get_string("active_game", active_game);
-    if (!game_profiles.count(active_game) && !game_profiles.empty())
-        active_game = game_profiles.begin()->first;
-
     // Capture
     capture_method = get_string("capture_method", "duplication_api");
     capture_target = get_string("capture_target", "monitor");
@@ -573,10 +525,6 @@ bool Config::loadConfig(const std::string& filename)
     udp_port = get_long("udp_port", 1234);
     if (udp_port < 1 || udp_port > 65535)
         udp_port = 1234;
-    detection_resolution = get_long("detection_resolution", 320);
-    detection_resolution = std::clamp(detection_resolution, 160, 640);
-    detection_resolution = (detection_resolution / 32) * 32;
-
     capture_fps = get_long("capture_fps", 120);
     // 采集帧率范围钳制：0 表示不限制（capture.cpp 显式支持 unlimited 语义），
     // 负值按 0 处理避免帧限速器出现负时长；上限对齐 UI ValidateIntParam(&config.capture_fps, 1, 240, 60)。
@@ -587,6 +535,7 @@ bool Config::loadConfig(const std::string& filename)
     // 钳制到 [0, 63]（最多 64 屏）对齐键盘热键循环切换场景，防止误配大索引静默失效。
     monitor_idx = std::clamp(monitor_idx, 0, 63);
     circle_fov_enabled = get_bool("circle_fov_enabled", true);
+    circle_fov_enabled = true; // 内部强制开启，UI 不再提供开关。
     circle_fov_radius_percent = get_long("circle_fov_radius_percent", 100);
     if (circle_fov_radius_percent < 1) circle_fov_radius_percent = 1;
     if (circle_fov_radius_percent > 100) circle_fov_radius_percent = 100;
@@ -608,17 +557,8 @@ bool Config::loadConfig(const std::string& filename)
     tracker_overlay_table_enabled = get_bool("tracker_overlay_table_enabled", true);
     targeting_mode = get_string("targeting_mode", "closest_center");
 
-    // Mouse
-    fovX = get_long("fovX", 121);
-    fovY = get_long("fovY", 90);
-    // FOV 必须为正：calc_movement 中 degPerPx = fov / screen_size，
-    // fov<=0 会导致瞄准位移恒为 0（失效）或负值（反向移动）。
-    // 取值范围与 UI 的 ValidateIntParam(&config.fovX, 1, 360, 121) 保持一致。
-    fovX = std::clamp(fovX, 1, 360);
-    fovY = std::clamp(fovY, 1, 360);
-    minSpeedMultiplier = (float)get_double("minSpeedMultiplier", 0.1);
-    maxSpeedMultiplier = (float)get_double("maxSpeedMultiplier", 0.1);
-
+    // MouseController path is now project-internal; old FOV / sensitivity legacy not loaded.
+    mc_enabled = true;
     predictionInterval = (float)get_double("predictionInterval", 0.01);
     prediction_futurePositions = get_long("prediction_futurePositions", 20);
     draw_futurePositions = get_bool("draw_futurePositions", true);
@@ -634,25 +574,26 @@ bool Config::loadConfig(const std::string& filename)
     kalman_reset_timeout_sec = (float)get_double("kalman_reset_timeout_sec", 0.5);
 
     // MouseController 移植模块参数 (依据 鼠标调参指南.md)
-    mc_enabled = get_bool("mc_enabled", true);
-    mc_x_tracking = (float)get_double("mc_x_tracking", 3.0);
+    // 全局鼠标移动算法不再开放 UI/配置兼容；内部固定启用 MouseController 路径。
+    mc_enabled = true;
+    mc_x_tracking = (float)get_double("mc_x_tracking", 4.5);
     mc_x_damping  = (float)get_double("mc_x_damping", 0.05);
-    mc_x_maxspeed = (float)get_double("mc_x_maxspeed", 1500.0);
-    mc_x_integral = (float)get_double("mc_x_integral", 0.0);
-    mc_x_deadzone = (float)get_double("mc_x_deadzone", 2.0);
-    mc_y_tracking = (float)get_double("mc_y_tracking", 3.0);
+    mc_x_maxspeed = (float)get_double("mc_x_maxspeed", 2400.0);
+    mc_x_integral = (float)get_double("mc_x_integral", 0.05);
+    mc_x_deadzone = (float)get_double("mc_x_deadzone", 1.0);
+    mc_y_tracking = (float)get_double("mc_y_tracking", 4.5);
     mc_y_damping  = (float)get_double("mc_y_damping", 0.05);
-    mc_y_maxspeed = (float)get_double("mc_y_maxspeed", 1500.0);
-    mc_y_integral = (float)get_double("mc_y_integral", 0.0);
-    mc_y_deadzone = (float)get_double("mc_y_deadzone", 2.0);
-    mc_maxstep  = (float)get_double("mc_maxstep", 30.0);
-    mc_retarget = (float)get_double("mc_retarget", 50.0);
-    mc_ahead_min = (float)get_double("mc_ahead_min", 0.05);
-    mc_ahead_max = (float)get_double("mc_ahead_max", 0.15);
-    mc_dur_min   = (float)get_double("mc_dur_min", 0.15);
-    mc_dur_max   = (float)get_double("mc_dur_max", 0.60);
-    mc_kalman_q  = (float)get_double("mc_kalman_q", 1000.0);
-    mc_kalman_r  = (float)get_double("mc_kalman_r", 25.0);
+    mc_y_maxspeed = (float)get_double("mc_y_maxspeed", 2400.0);
+    mc_y_integral = (float)get_double("mc_y_integral", 0.05);
+    mc_y_deadzone = (float)get_double("mc_y_deadzone", 1.0);
+    mc_maxstep  = (float)get_double("mc_maxstep", 35.0);
+    mc_retarget = (float)get_double("mc_retarget", 60.0);
+    mc_ahead_min = (float)get_double("mc_ahead_min", 0.03);
+    mc_ahead_max = (float)get_double("mc_ahead_max", 0.12);
+    mc_dur_min   = (float)get_double("mc_dur_min", 0.12);
+    mc_dur_max   = (float)get_double("mc_dur_max", 0.45);
+    mc_kalman_q  = (float)get_double("mc_kalman_q", 1500.0);
+    mc_kalman_r  = (float)get_double("mc_kalman_r", 30.0);
 
     snapRadius = (float)get_double("snapRadius", 1.5);
     nearRadius = (float)get_double("nearRadius", 25.0);
@@ -756,6 +697,10 @@ bool Config::loadConfig(const std::string& filename)
     confidence_threshold = (float)get_double("confidence_threshold", 0.5);
     nms_threshold = (float)get_double("nms_threshold", 0.4);
     max_detections = get_long("max_detections", 8);
+    force_model_input_size = get_bool("force_model_input_size", false);
+    force_model_input_width = get_long("force_model_input_width", 320, 32, 1024);
+    force_model_input_height = get_long("force_model_input_height", 320, 32, 1024);
+    normalizeModelInputSize(force_model_input_width, force_model_input_height);
 #ifdef USE_CUDA
     export_enable_fp8 = get_bool("export_enable_fp8", true);
     export_enable_fp16 = get_bool("export_enable_fp16", true);
@@ -939,19 +884,19 @@ bool Config::loadConfig(const std::string& filename)
     // 会经 syncMouseController() 直达算法：maxStep=0 使每帧位移恒 0（瞄准静默失效）、
     // tracking=0 使 PID 无比例项（响应极慢）、q=0 使卡尔曼协方差迅速收敛不再跟随观测。
     // 钳制后行为与 UI 步进控件一致，杜绝"无声失效"类问题。
-    mc_x_tracking  = std::clamp(mc_x_tracking, 2.0f, 6.0f);
-    mc_y_tracking  = std::clamp(mc_y_tracking, 2.0f, 6.0f);
-    mc_x_damping   = std::clamp(mc_x_damping, 0.02f, 0.12f);
-    mc_y_damping   = std::clamp(mc_y_damping, 0.02f, 0.12f);
-    mc_x_maxspeed  = std::clamp(mc_x_maxspeed, 800.0f, 3000.0f);
-    mc_y_maxspeed  = std::clamp(mc_y_maxspeed, 800.0f, 3000.0f);
-    mc_x_integral  = std::clamp(mc_x_integral, 0.0f, 2.0f);
-    mc_y_integral  = std::clamp(mc_y_integral, 0.0f, 2.0f);
-    mc_x_deadzone  = std::clamp(mc_x_deadzone, 1.0f, 5.0f);
-    mc_y_deadzone  = std::clamp(mc_y_deadzone, 1.0f, 5.0f);
-    mc_maxstep     = std::clamp(mc_maxstep, 15.0f, 50.0f);
-    mc_retarget    = std::clamp(mc_retarget, 10.0f, 200.0f);
-    mc_ahead_min   = std::clamp(mc_ahead_min, 0.02f, 0.15f);
+    mc_x_tracking  = std::clamp(mc_x_tracking, 1.0f, 999.0f);
+    mc_y_tracking  = std::clamp(mc_y_tracking, 1.0f, 999.0f);
+    mc_x_damping   = std::clamp(mc_x_damping, 0.01f, 0.99f);
+    mc_y_damping   = std::clamp(mc_y_damping, 0.01f, 0.99f);
+    mc_x_maxspeed  = std::clamp(mc_x_maxspeed, 100.0f, 9999.0f);
+    mc_y_maxspeed  = std::clamp(mc_y_maxspeed, 100.0f, 9999.0f);
+    mc_x_integral  = std::clamp(mc_x_integral, 0.0f, 999.0f);
+    mc_y_integral  = std::clamp(mc_y_integral, 0.0f, 999.0f);
+    mc_x_deadzone  = std::clamp(mc_x_deadzone, 0.0f, 999.0f);
+    mc_y_deadzone  = std::clamp(mc_y_deadzone, 0.0f, 999.0f);
+    mc_maxstep     = std::clamp(mc_maxstep, 1.0f, 999.0f);
+    mc_retarget    = std::clamp(mc_retarget, 1.0f, 999.0f);
+    mc_ahead_min   = std::clamp(mc_ahead_min, 0.01f, 1.00f);
     mc_ahead_max   = std::clamp(mc_ahead_max, 0.05f, 0.30f);
     mc_dur_min     = std::clamp(mc_dur_min, 0.10f, 0.60f);
     mc_dur_max     = std::clamp(mc_dur_max, 0.15f, 1.00f);
@@ -988,8 +933,6 @@ bool Config::loadConfig(const std::string& filename)
     confidence_threshold = std::clamp(confidence_threshold, 0.1f, 0.9f);
     nms_threshold = std::clamp(nms_threshold, 0.1f, 0.9f);
     max_detections = std::clamp(max_detections, 1, 20);
-    minSpeedMultiplier = std::clamp(minSpeedMultiplier, 0.001f, 10.0f);
-    maxSpeedMultiplier = std::clamp(maxSpeedMultiplier, minSpeedMultiplier, 10.0f);
     nearRadius = std::clamp(nearRadius, 0.0f, 500.0f);
     snapRadius = std::clamp(snapRadius, nearRadius, 500.0f);
     speedCurveExponent = std::clamp(speedCurveExponent, 0.01f, 10.0f);
@@ -1061,7 +1004,6 @@ bool Config::saveConfig(const std::string& filename)
         << "capture_window_title = " << capture_window_title << "\n"
         << "udp_ip = " << udp_ip << "\n"
         << "udp_port = " << udp_port << "\n"
-        << "detection_resolution = " << detection_resolution << "\n"
         << "capture_fps = " << capture_fps << "\n"
         << "monitor_idx = " << monitor_idx << "\n"
         << "circle_fov_enabled = " << (circle_fov_enabled ? "true" : "false") << "\n"
@@ -1084,13 +1026,8 @@ bool Config::saveConfig(const std::string& filename)
         << "tracker_overlay_table_enabled = " << (tracker_overlay_table_enabled ? "true" : "false") << "\n"
         << "targeting_mode = " << targeting_mode << "\n\n";
 
-    // Mouse
+    // MouseController params are profile-local; old FOV / sensitivity legacy not saved.
     file << "# Mouse move\n"
-        << "fovX = " << fovX << "\n"
-        << "fovY = " << fovY << "\n"
-        << "minSpeedMultiplier = " << minSpeedMultiplier << "\n"
-        << "maxSpeedMultiplier = " << maxSpeedMultiplier << "\n"
-
         << std::fixed << std::setprecision(2)
         << "predictionInterval = " << predictionInterval << "\n"
         << "prediction_futurePositions = " << prediction_futurePositions << "\n"
@@ -1234,6 +1171,9 @@ bool Config::saveConfig(const std::string& filename)
         << "nms_threshold = " << nms_threshold << "\n"
         << std::setprecision(0)
         << "max_detections = " << max_detections << "\n"
+        << "force_model_input_size = " << (force_model_input_size ? "true" : "false") << "\n"
+        << "force_model_input_width = " << force_model_input_width << "\n"
+        << "force_model_input_height = " << force_model_input_height << "\n"
 #ifdef USE_CUDA
         << "export_enable_fp8 = " << (export_enable_fp8 ? "true" : "false") << "\n"
         << "export_enable_fp16 = " << (export_enable_fp16 ? "true" : "false") << "\n"
@@ -1371,22 +1311,6 @@ bool Config::saveConfig(const std::string& filename)
         << "screenshot_delay = " << screenshot_delay << "\n"
         << "verbose = " << (verbose ? "true" : "false") << "\n\n";
 
-    // Active game
-    file << "# Active game profile\n";
-    file << "active_game = " << active_game << "\n\n";
-    file << std::defaultfloat << std::setprecision(6);
-    file << "[Games]\n";
-    for (auto& kv : game_profiles)
-    {
-        auto & gp = kv.second;
-        file << gp.name << " = "
-             << gp.sens << "," << gp.yaw;
-        file << "," << gp.pitch;
-        if (gp.fovScaled)
-            file << ",true," << gp.baseFOV;
-        file << "\n";
-    }
-
     file.close();
     return true;
 }
@@ -1416,24 +1340,4 @@ bool Config::resetToFactoryDefaults()
             return false;
     }
     return loadConfig(target.string());
-}
-
-const Config::GameProfile& Config::currentProfile() const
-{
-    auto it = game_profiles.find(active_game);
-    if (it != game_profiles.end()) return it->second;
-    throw std::runtime_error("Active game profile not found: " + active_game);
-}
-
-std::pair<double, double> Config::degToCounts(double degX, double degY, double fovNow) const
-{
-    const auto& gp = currentProfile();
-    double scale = (gp.fovScaled && gp.baseFOV > 1.0) ? (fovNow / gp.baseFOV) : 1.0;
-
-    if (gp.sens == 0.0 || gp.yaw == 0.0 || gp.pitch == 0.0)
-        return { 0.0, 0.0 };
-
-    double cx = degX / (gp.sens * gp.yaw * scale);
-    double cy = degY / (gp.sens * gp.pitch * scale);
-    return { cx, cy };
 }
