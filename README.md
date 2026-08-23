@@ -18,7 +18,7 @@ Real-time YOLO inference, aiming, and input control for Windows, built with C++1
 - Windows-only 原生工程，源码根目录为 `main`
 - NVIDIA CUDA/TensorRT 推理后端
 - ImGui overlay 负责 UI、参数调整、运行状态显示
-- 输入设备支持原生鼠标、KMBOX、KMBOX-A、KMBOX-Net、MAKCU 等接入方式
+- 输入设备支持原生鼠标(WIN32)、KMBOX-Net、KMBOX-A、MAKCU 等接入方式
 - 鼠标控制算法包含 Kalman、Minimum Jerk、PID、拟人化轨迹与目标发布
 - 多线程分工：采集、推理、输入控制、UI 各线程独立
 
@@ -60,11 +60,10 @@ build_cuda\Release\ai.exe
 
 | 按键 | 功能 |
 |------|------|
-| Right Mouse Button | 对目标执行瞄准控制 |
-| F2 | 退出 |
-| F3 | 暂停瞄准 |
-| F4 | 重载配置 |
-| Home | 打开/关闭 overlay |
+| Right Mouse Button | 对目标执行瞄准控制（默认） |
+| F10 | 打开/关闭 overlay |
+| F12 | 退出程序 |
+| 无默认 | 暂停瞄准、重载配置（可在 config.ini 或 UI 中绑定） |
 
 ### 目录结构
 
@@ -110,7 +109,7 @@ build_cuda\Release\ai.exe
 - Windows-only native project, source root: `main`
 - NVIDIA CUDA/TensorRT inference backend
 - ImGui overlay for UI, parameter adjustment, and runtime status
-- Supports native mouse, KMBOX, KMBOX-A, KMBOX-Net, MAKCU input paths
+- Supports native mouse (WIN32), KMBOX-Net, KMBOX-A, MAKCU input paths
 - Mouse control algorithms include Kalman, Minimum Jerk, PID, human-like movement, and target publishing
 - Multi-threaded pipeline: capture, inference, input control, and UI run separately
 
@@ -152,11 +151,10 @@ build_cuda\Release\ai.exe
 
 | Key | Action |
 |-----|--------|
-| Right Mouse Button | Aim at detected target |
-| F2 | Exit |
-| F3 | Pause aiming |
-| F4 | Reload config |
-| Home | Toggle overlay |
+| Right Mouse Button | Aim at detected target (default) |
+| F10 | Toggle overlay |
+| F12 | Exit program |
+| None (default) | Pause aiming, reload config (bind in config.ini or UI) |
 
 ### Project Layout
 
